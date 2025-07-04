@@ -210,7 +210,7 @@ const server = app.listen(PORT, () => {
     console.log(`🚀 Server running on port ${PORT}`);
     console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
     console.log(`📁 Serving static files from: ${path.join(__dirname, 'client')}`);
-    console.log(`☁️  AWS S3 Bucket: ${process.env.AWS_BUCKET_NAME}`);
+    console.log(`☁️  AWS S3 Bucket: ${process.env.S3_BUCKET_NAME}`);
     console.log(`🗄️  MongoDB: ${process.env.MONGODB_URI ? 'Connected' : 'Not configured'}`);
 });
 
