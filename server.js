@@ -39,10 +39,16 @@ app.use(helmet({
 }));
 
 app.use(cors({
-    origin: process.env.NODE_ENV === 'production' 
-        ? ['https://yourdomain.com'] 
-        : ['http://localhost:3000', 'http://127.0.0.1:3000'],
-    credentials: true
+    origin: [
+        'https://jovial-toffee-39ae6b.netlify.app',
+        'https://philip-box.onrender.com',
+        'http://localhost:3000', 
+        'http://127.0.0.1:3000',
+        'http://localhost:8080'
+    ],
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 }));
 
 app.use(compression());
