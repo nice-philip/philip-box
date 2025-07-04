@@ -15,6 +15,11 @@ require('dotenv').config();
 const app = express();
 const PORT = process.env.PORT || 8080;
 
+// Trust proxy for deployment platforms like Render.com
+if (process.env.NODE_ENV === 'production') {
+    app.set('trust proxy', 1);
+}
+
 // Configure AWS
 AWS.config.update({
     accessKeyId: process.env.AWS_ACCESS_KEY_ID,

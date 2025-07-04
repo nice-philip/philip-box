@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MyDropbox - Philip Box</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="header-left">
+            <div class="logo">
+                <i class="fas fa-cloud"></i>
+                <span>MyDropbox</span>
+            </div>
+            <nav class="nav">
+                <a href="#" class="nav-item active" data-section="files">파일</a>
+                <a href="#" class="nav-item" data-section="shared">공유됨</a>
+                <a href="#" class="nav-item" data-section="recent">최근</a>
+                <a href="#" class="nav-item" data-section="deleted">삭제됨</a>
+            </nav>
+        </div>
+        <div class="header-right">
+            <div class="search-box">
+                <i class="fas fa-search"></i>
+                <input type="text" placeholder="파일 검색..." id="searchInput">
+            </div>
+            <div class="user-menu">
+                <div class="user-avatar" id="userAvatar">
+                    <i class="fas fa-user"></i>
+                </div>
+                <div class="user-dropdown" id="userDropdown">
+                    <div class="user-info">
+                        <span id="userName">사용자</span>
+                        <span id="userEmail">user@example.com</span>
+                    </div>
+                    <hr>
+                    <a href="#" id="logoutBtn"><i class="fas fa-sign-out-alt"></i> 로그아웃</a>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-actions">
+                <button class="btn btn-primary" id="uploadBtn">
+                    <i class="fas fa-upload"></i>
+                    업로드
+                </button>
+                <button class="btn btn-secondary" id="createFolderBtn">
+                    <i class="fas fa-folder-plus"></i>
+                    새 폴더
+                </button>
+            </div>
+            <div class="sidebar-storage">
+                <div class="storage-info">
+                    <div class="storage-bar">
+                        <div class="storage-used" id="storageUsed"></div>
+                    </div>
+                    <div class="storage-text">
+                        <span id="storageText">0GB / 2GB 사용</span>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- File Area -->
+        <section class="file-area">
+            <!-- Breadcrumb -->
+            <div class="breadcrumb">
+                <div class="breadcrumb-nav" id="breadcrumbNav">
+                    <a href="#" data-path="/" class="breadcrumb-item active">내 파일</a>
+                </div>
+                <div class="view-options">
+                    <button class="view-btn active" data-view="grid" id="gridViewBtn">
+                        <i class="fas fa-th-large"></i>
+                    </button>
+                    <button class="view-btn" data-view="list" id="listViewBtn">
+                        <i class="fas fa-list"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- File List -->
+            <div class="file-container" id="fileContainer">
+                <div class="file-list" id="fileList">
+                    <!-- Files will be dynamically loaded here -->
+                </div>
+            </div>
+
+            <!-- Upload Area -->
+            <div class="upload-area" id="uploadArea">
+                <div class="upload-zone" id="uploadZone">
+                    <i class="fas fa-cloud-upload-alt"></i>
+                    <p>파일을 여기에 드래그하거나 클릭하여 업로드</p>
+                    <input type="file" id="fileInput" multiple hidden>
+                </div>
+                <div class="upload-progress" id="uploadProgress">
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="progressFill"></div>
+                    </div>
+                    <div class="progress-text" id="progressText">업로드 중...</div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Modals -->
+    <!-- Login Modal -->
+    <div class="modal" id="loginModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>로그인</h2>
+                <button class="modal-close" id="loginModalClose">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="loginForm">
+                    <div class="form-group">
+                        <label for="loginEmail">이메일</label>
+                        <input type="email" id="loginEmail" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="loginPassword">비밀번호</label>
+                        <input type="password" id="loginPassword" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary">로그인</button>
+                    <p class="auth-link">계정이 없으신가요? <a href="#" id="showRegister">회원가입</a></p>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Register Modal -->
+    <div class="modal" id="registerModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>회원가입</h2>
+                <button class="modal-close" id="registerModalClose">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="registerForm">
+                    <div class="form-group">
+                        <label for="registerName">이름</label>
+                        <input type="text" id="registerName" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="registerEmail">이메일</label>
+                        <input type="email" id="registerEmail" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="registerPassword">비밀번호</label>
+                        <input type="password" id="registerPassword" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="confirmPassword">비밀번호 확인</label>
+                        <input type="password" id="confirmPassword" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary">회원가입</button>
+                    <p class="auth-link">이미 계정이 있으신가요? <a href="#" id="showLogin">로그인</a></p>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- File Preview Modal -->
+    <div class="modal" id="previewModal">
+        <div class="modal-content modal-large">
+            <div class="modal-header">
+                <h2 id="previewTitle">파일 미리보기</h2>
+                <button class="modal-close" id="previewModalClose">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="preview-container" id="previewContainer">
+                    <!-- Preview content will be loaded here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Context Menu -->
+    <div class="context-menu" id="contextMenu">
+        <div class="context-item" id="downloadFile">
+            <i class="fas fa-download"></i>
+            다운로드
+        </div>
+        <div class="context-item" id="shareFile">
+            <i class="fas fa-share-alt"></i>
+            공유
+        </div>
+        <div class="context-item" id="renameFile">
+            <i class="fas fa-edit"></i>
+            이름 바꾸기
+        </div>
+        <div class="context-item" id="moveFile">
+            <i class="fas fa-cut"></i>
+            이동
+        </div>
+        <div class="context-item context-separator"></div>
+        <div class="context-item context-danger" id="deleteFile">
+            <i class="fas fa-trash"></i>
+            삭제
+        </div>
+    </div>
+
+    <!-- Loading Spinner -->
+    <div class="loading-spinner" id="loadingSpinner">
+        <div class="spinner"></div>
+    </div>
+
+    <!-- Notification -->
+    <div class="notification" id="notification">
+        <div class="notification-content">
+            <i class="fas fa-check-circle"></i>
+            <span id="notificationText">알림 메시지</span>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="config.js"></script>
+    <script src="utils.js"></script>
+    <script src="auth.js"></script>
+    <script src="fileManager.js"></script>
+    <script src="upload.js"></script>
+    <script src="preview.js"></script>
+    <script src="script.js"></script>
+</body>
+</html> 
