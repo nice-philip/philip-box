@@ -13,7 +13,15 @@ const router = express.Router();
 const s3 = new AWS.S3({
     accessKeyId: process.env.AWS_ACCESS_KEY_ID,
     secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
-    region: process.env.AWS_REGION || 'ap-northeast-2'
+    region: process.env.AWS_REGION || 'ap-northeast-2',
+    signatureVersion: 'v4'
+});
+
+// Add debug logging for AWS configuration
+console.log('AWS Configuration:', {
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID ? process.env.AWS_ACCESS_KEY_ID.substring(0, 10) + '...' : 'undefined',
+    region: process.env.AWS_REGION || 'ap-northeast-2',
+    bucket: process.env.S3_BUCKET_NAME
 });
 
 // Configure multer for file uploads
