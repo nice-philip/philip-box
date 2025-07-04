@@ -84,18 +84,39 @@ router.get('/', auth, async (req, res) => {
 // Upload file
 router.post('/upload', auth, upload.single('file'), async (req, res) => {
     try {
+        console.log('Upload request received:', {
+            file: req.file ? { name: req.file.originalname, size: req.file.size } : 'No file',
+            body: req.body,
+            userId: req.user.userId
+        });
+
         const { path: filePath = '/' } = req.body;
         const userId = req.user.userId;
 
         if (!req.file) {
+            console.log('No file provided in request');
             return res.status(400).json({
                 message: 'No file provided'
             });
         }
 
+        console.log('Finding user:', userId);
         // Check user storage quota
         const user = await User.findById(userId);
+        if (!user) {
+            console.error('User not found:', userId);
+            return res.status(404).json({
+                message: 'User not found'
+            });
+        }
+
+        console.log('Checking storage quota:', { 
+            fileSize: req.file.size, 
+            userStorage: user.storage 
+        });
+        
         if (!user.hasEnoughStorage(req.file.size)) {
+            console.log('Storage quota exceeded');
             return res.status(413).json({
                 message: 'Storage quota exceeded'
             });
@@ -105,6 +126,12 @@ router.post('/upload', auth, upload.single('file'), async (req, res) => {
         const fileExtension = path.extname(req.file.originalname);
         const fileName = `${crypto.randomBytes(16).toString('hex')}${fileExtension}`;
         const s3Key = `uploads/${userId}/${fileName}`;
+
+        console.log('Uploading to S3:', { 
+            bucket: process.env.S3_BUCKET_NAME, 
+            key: s3Key,
+            size: req.file.size
+        });
 
         // Upload to S3
         const uploadParams = {
@@ -119,7 +146,9 @@ router.post('/upload', auth, upload.single('file'), async (req, res) => {
         };
 
         const uploadResult = await s3.upload(uploadParams).promise();
+        console.log('S3 upload successful:', uploadResult.Location);
 
+        console.log('Creating file record in database');
         // Create file record
         const file = new File({
             name: req.file.originalname,
@@ -135,9 +164,12 @@ router.post('/upload', auth, upload.single('file'), async (req, res) => {
         });
 
         await file.save();
+        console.log('File record saved:', file._id);
 
+        console.log('Updating user storage usage');
         // Update user storage
         await user.updateStorageUsage(req.file.size);
+        console.log('User storage updated successfully');
 
         res.json({
             message: 'File uploaded successfully',
@@ -152,7 +184,12 @@ router.post('/upload', auth, upload.single('file'), async (req, res) => {
         });
 
     } catch (error) {
-        console.error('Upload error:', error);
+        console.error('Upload error details:', {
+            message: error.message,
+            stack: error.stack,
+            code: error.code,
+            statusCode: error.statusCode
+        });
         res.status(500).json({
             message: 'Upload failed',
             error: error.message
