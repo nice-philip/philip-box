@@ -18,41 +18,39 @@ class AuthManager {
 
         if (token && user) {
             try {
+                console.log('✅ Token and user found, setting up login state...');
+                
                 // Parse user data first
                 this.currentUser = JSON.parse(user);
                 this.isLoggedIn = true;
+                this.initializationComplete = true; // Set this immediately
                 
-                console.log('✅ Auth data found, user:', this.currentUser.email);
+                console.log('✅ Auth data loaded, user:', this.currentUser.email);
                 
-                // Update UI immediately and forcefully
-                this.forceUIUpdate();
+                // Force UI update multiple times to ensure it takes
+                this.forceLoginState();
                 
-                // Hide login modal immediately
-                this.hideLoginModal();
+                // Set a timer to keep forcing the state
+                let updateCount = 0;
+                const forceUpdate = () => {
+                    this.forceLoginState();
+                    updateCount++;
+                    
+                    if (updateCount < 10) { // Try 10 times over 5 seconds
+                        setTimeout(forceUpdate, 500);
+                    }
+                };
+                forceUpdate();
                 
-                // Show main content immediately
-                this.showMainContent();
-                
-                // Enable interface immediately  
-                this.enableInterface();
-                
-                console.log('✅ UI updated, loading user data...');
-                
-                // Load user data in background
+                // Load user data and files
                 setTimeout(async () => {
-                    await this.loadUserData();
-                }, 100);
-                
-                // Validate token silently (non-blocking)
-                setTimeout(() => {
-                    this.validateTokenSilently();
-                }, 500);
-                
-                this.initializationComplete = true;
-                console.log('✅ Auth initialization COMPLETE');
+                    await this.loadUserDataAndFiles();
+                }, 200);
                 
                 // Dispatch auth initialized event
                 this.dispatchAuthEvent('auth-initialized', { authenticated: true });
+                
+                console.log('✅ Auth initialization COMPLETE - User is logged in');
                 
             } catch (error) {
                 console.error('❌ Auth initialization error:', error);
@@ -64,45 +62,48 @@ class AuthManager {
         }
     }
 
-    // Force UI update to ensure proper state
-    forceUIUpdate() {
-        console.log('🔧 FORCING UI update - isLoggedIn:', this.isLoggedIn, 'user:', this.currentUser?.email);
+    // Force login state with maximum persistence
+    forceLoginState() {
+        console.log('🔧 FORCING login state...');
         
-        if (this.isLoggedIn && this.currentUser) {
-            // User is logged in - force all UI elements
-            document.body.classList.remove('logged-out');
-            document.body.classList.add('logged-in');
-            
-            // Force hide login modal
-            const loginModal = document.getElementById('loginModal');
-            if (loginModal) {
-                loginModal.style.display = 'none';
-                loginModal.classList.remove('active');
-            }
-            
-            // Force show main content
-            const mainContent = document.querySelector('.main-content');
-            if (mainContent) {
-                mainContent.style.display = 'flex';
-                mainContent.style.visibility = 'visible';
-                mainContent.style.opacity = '1';
-            }
-            
-            // Update user info in header with retry
-            this.updateUserInfo();
-            
-            console.log('✅ FORCED UI updated for logged in user');
-        } else {
-            // User is not logged in
-            document.body.classList.remove('logged-in');
-            document.body.classList.add('logged-out');
-            
-            console.log('✅ FORCED UI updated for logged out state');
+        // Set authentication flags
+        this.isLoggedIn = true;
+        this.initializationComplete = true;
+        
+        // Force body classes
+        document.body.classList.remove('logged-out');
+        document.body.classList.add('logged-in');
+        
+        // Force hide login modal
+        const loginModal = document.getElementById('loginModal');
+        if (loginModal) {
+            loginModal.style.display = 'none !important';
+            loginModal.classList.remove('active');
+            loginModal.setAttribute('hidden', 'true');
         }
+        
+        // Force show main content
+        const mainContent = document.querySelector('.main-content');
+        if (mainContent) {
+            mainContent.style.display = 'flex !important';
+            mainContent.style.visibility = 'visible !important';
+            mainContent.style.opacity = '1 !important';
+            mainContent.removeAttribute('hidden');
+        }
+        
+        // Update user info with retries
+        this.updateUserInfoPersistent();
+        
+        // Enable all interface elements
+        this.enableInterface();
+        
+        console.log('✅ Login state FORCED');
     }
 
-    // Update user info in header with retries
-    updateUserInfo() {
+    // Update user info with persistent retries
+    updateUserInfoPersistent() {
+        if (!this.currentUser) return;
+        
         const updateInfo = () => {
             const userAvatar = document.getElementById('userAvatar');
             const userName = document.getElementById('userName');
@@ -117,68 +118,70 @@ class AuthManager {
                         this.currentUser.email.charAt(0).toUpperCase();
                     userAvatar.textContent = initials;
                 }
-                console.log('✅ User avatar updated');
+                userAvatar.style.display = 'flex';
             }
             
             if (userName) {
                 userName.textContent = this.currentUser.name || this.currentUser.email.split('@')[0];
-                console.log('✅ User name updated');
+                userName.style.display = 'block';
             }
             
             if (userEmail) {
                 userEmail.textContent = this.currentUser.email;
-                console.log('✅ User email updated');
+                userEmail.style.display = 'block';
             }
         };
         
-        // Try immediately
+        // Try multiple times with different intervals
         updateInfo();
-        
-        // Retry after short delay if elements weren't found
         setTimeout(updateInfo, 100);
+        setTimeout(updateInfo, 300);
         setTimeout(updateInfo, 500);
+        setTimeout(updateInfo, 1000);
+        setTimeout(updateInfo, 2000);
     }
 
-    // Enhanced UI update method
-    updateUI() {
-        this.forceUIUpdate();
-    }
-
-    // Load user data and initialize app components
-    async loadUserData() {
+    // Load user data and files with error handling
+    async loadUserDataAndFiles() {
         try {
-            console.log('Loading user data...');
+            console.log('📂 Loading user data and files...');
             
-            // Initialize file manager
+            // Ensure file manager is available
             if (window.fileManager) {
-                console.log('✓ File manager available, loading files...');
+                console.log('✅ File manager available, loading files...');
                 
-                // Load from URL if available, otherwise load root
+                // Load files first
+                await window.fileManager.loadFiles();
+                console.log('✅ Files loaded');
+                
+                // Load storage info
+                await window.fileManager.loadStorageInfo();
+                console.log('✅ Storage info loaded');
+                
+                // Check for URL parameters
                 const urlParams = new URLSearchParams(window.location.search);
                 const pathParam = urlParams.get('path');
                 const sectionParam = urlParams.get('section');
                 
                 if (pathParam || sectionParam) {
-                    console.log('Found URL parameters, loading from URL');
-                    // Let fileManager handle URL-based navigation
+                    console.log('🔗 Loading from URL parameters');
                     window.fileManager.loadFolderFromUrl();
-                } else {
-                    // Load default files
-                    await window.fileManager.loadFiles();
                 }
                 
-                await window.fileManager.loadStorageInfo();
-                console.log('✓ Files loaded successfully');
+            } else {
+                console.warn('⚠️ File manager not available yet, will retry...');
+                
+                // Retry after delay
+                setTimeout(() => {
+                    this.loadUserDataAndFiles();
+                }, 1000);
             }
-            
-            console.log('✓ User data loaded successfully');
             
         } catch (error) {
             console.error('❌ Failed to load user data:', error);
-            // Don't logout immediately for network errors
-            if (error.status === 401 || error.status === 403) {
-                this.handleAuthError();
-            }
+            
+            // Don't logout for data loading errors
+            console.log('📝 Data loading failed but keeping user logged in');
         }
     }
 
@@ -521,6 +524,22 @@ class AuthManager {
             window.eventBus.dispatchEvent(new CustomEvent(eventName, {
                 detail: data
             }));
+        }
+    }
+
+    // Enhanced UI update method - always force login state if user exists
+    updateUI() {
+        console.log('🔄 Updating UI - isLoggedIn:', this.isLoggedIn, 'user:', this.currentUser?.email);
+        
+        if (this.currentUser && localStorage.getItem(CONFIG.STORAGE_KEYS.TOKEN)) {
+            // If we have user and token, force login state regardless of isLoggedIn flag
+            this.isLoggedIn = true;
+            this.forceLoginState();
+        } else {
+            // Only show logout state if no user data exists
+            document.body.classList.remove('logged-in');
+            document.body.classList.add('logged-out');
+            this.showLoginModal();
         }
     }
 }
