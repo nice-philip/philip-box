@@ -157,7 +157,7 @@ router.post('/upload', auth, upload.single('file'), async (req, res) => {
         // Get download URL
         const [downloadUrl] = await file.getSignedUrl({
             action: 'read',
-            expires: '03-17-2025' // 장기간 유효한 URL
+            expires: Date.now() + 365 * 24 * 60 * 60 * 1000 // 1 year from now
         });
 
         console.log('Firebase Storage upload successful:', downloadUrl);
