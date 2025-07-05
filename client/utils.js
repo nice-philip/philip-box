@@ -25,8 +25,35 @@ class Utils {
             const weeks = Math.floor(diffDays / 7);
             return `${weeks}주 전`;
         } else {
-            return fileDate.toLocaleDateString('ko-KR');
+            return fileDate.toLocaleDateString('ko-KR', {
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric'
+            });
         }
+    }
+
+    // Format time (for ETA, duration, etc.)
+    static formatTime(seconds) {
+        if (seconds < 60) {
+            return `${Math.round(seconds)}초`;
+        } else if (seconds < 3600) {
+            return `${Math.round(seconds / 60)}분`;
+        } else {
+            return `${Math.round(seconds / 3600)}시간`;
+        }
+    }
+
+    // Format detailed date
+    static formatDetailedDate(date) {
+        if (!date) return 'Unknown';
+        return new Date(date).toLocaleDateString('ko-KR', {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
     }
 
     // Get file extension
@@ -54,6 +81,14 @@ class Utils {
             }
         }
         return false;
+    }
+
+    // Check if file type supports thumbnail
+    static isThumbnailSupported(filename) {
+        if (!CONFIG.APP_CONFIG.THUMBNAIL_CONFIG.enabled) return false;
+        
+        const ext = this.getFileExtension(filename);
+        return CONFIG.APP_CONFIG.THUMBNAIL_CONFIG.supportedTypes.includes(ext);
     }
 
     // Validate file
@@ -126,16 +161,29 @@ class Utils {
         };
     }
 
-    // API request helper
-    static async apiRequest(url, options = {}) {
+    // Enhanced API request helper
+    static async apiRequest(url, method = 'GET', data = null, options = {}) {
         const token = localStorage.getItem(CONFIG.STORAGE_KEYS.TOKEN);
         
         const defaultOptions = {
+            method: method,
             headers: {
-                'Content-Type': 'application/json',
                 ...(token && { 'Authorization': `Bearer ${token}` })
             }
         };
+
+        // Handle different data types
+        if (data) {
+            if (data instanceof FormData) {
+                // Don't set Content-Type for FormData, let browser set it with boundary
+                defaultOptions.body = data;
+            } else if (typeof data === 'object') {
+                defaultOptions.headers['Content-Type'] = 'application/json';
+                defaultOptions.body = JSON.stringify(data);
+            } else {
+                defaultOptions.body = data;
+            }
+        }
 
         const mergedOptions = {
             ...defaultOptions,
@@ -148,15 +196,33 @@ class Utils {
 
         try {
             const response = await fetch(url, mergedOptions);
-            const data = await response.json();
-
-            if (!response.ok) {
-                throw new Error(data.message || 'API 요청에 실패했습니다.');
+            
+            // Handle different response types
+            let responseData;
+            const contentType = response.headers.get('content-type');
+            
+            if (contentType && contentType.includes('application/json')) {
+                responseData = await response.json();
+            } else {
+                responseData = await response.text();
             }
 
-            return data;
+            if (!response.ok) {
+                const errorMessage = typeof responseData === 'object' && responseData.message 
+                    ? responseData.message 
+                    : 'API 요청에 실패했습니다.';
+                throw new Error(errorMessage);
+            }
+
+            return responseData;
         } catch (error) {
             console.error('API Request Error:', error);
+            
+            // Handle network errors
+            if (error.name === 'TypeError' && error.message.includes('fetch')) {
+                throw new Error(CONFIG.ERROR_MESSAGES.NETWORK_ERROR);
+            }
+            
             throw error;
         }
     }
@@ -166,11 +232,14 @@ class Utils {
         const notification = document.getElementById('notification');
         const notificationText = document.getElementById('notificationText');
         
+        if (!notification || !notificationText) return;
+        
         notification.className = `notification ${type}`;
         notificationText.textContent = message;
         
         notification.classList.add('active');
         
+        // Auto hide after 3 seconds
         setTimeout(() => {
             notification.classList.remove('active');
         }, 3000);
@@ -179,10 +248,12 @@ class Utils {
     // Show loading
     static showLoading(show = true) {
         const loadingSpinner = document.getElementById('loadingSpinner');
-        if (show) {
-            loadingSpinner.classList.add('active');
-        } else {
-            loadingSpinner.classList.remove('active');
+        if (loadingSpinner) {
+            if (show) {
+                loadingSpinner.classList.add('active');
+            } else {
+                loadingSpinner.classList.remove('active');
+            }
         }
     }
 
@@ -197,14 +268,16 @@ class Utils {
         }
     }
 
-    // Download file
+    // Download file using blob
     static downloadFile(url, filename) {
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = filename;
+        link.style.display = 'none';
+        
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
     }
 
     // Convert file to base64
@@ -222,11 +295,12 @@ class Utils {
         return Math.round((used / total) * 100);
     }
 
-    // Format storage usage text
+    // Format storage usage
     static formatStorageUsage(used, total) {
         const usedFormatted = this.formatFileSize(used);
         const totalFormatted = this.formatFileSize(total);
-        return `${usedFormatted} / ${totalFormatted} 사용`;
+        const percentage = this.getStorageUsagePercentage(used, total);
+        return `${usedFormatted} / ${totalFormatted} (${percentage}%)`;
     }
 
     // Check if user is authenticated
@@ -247,8 +321,8 @@ class Utils {
 
     // Get user preferences
     static getPreferences() {
-        const prefsStr = localStorage.getItem(CONFIG.STORAGE_KEYS.PREFERENCES);
-        return prefsStr ? JSON.parse(prefsStr) : {
+        const preferencesStr = localStorage.getItem(CONFIG.STORAGE_KEYS.PREFERENCES);
+        return preferencesStr ? JSON.parse(preferencesStr) : {
             viewMode: CONFIG.VIEW_MODES.GRID,
             sortBy: 'name',
             sortOrder: 'asc'
@@ -257,35 +331,61 @@ class Utils {
 
     // Add to recent files
     static addToRecentFiles(fileInfo) {
-        const recentFiles = this.getRecentFiles();
-        const existingIndex = recentFiles.findIndex(f => f.id === fileInfo.id);
+        let recentFiles = this.getRecentFiles();
         
-        if (existingIndex !== -1) {
-            recentFiles.splice(existingIndex, 1);
-        }
+        // Remove existing entry
+        recentFiles = recentFiles.filter(f => f.id !== fileInfo.id);
         
+        // Add to beginning
         recentFiles.unshift({
             ...fileInfo,
             accessedAt: new Date().toISOString()
         });
         
         // Keep only last 50 files
-        if (recentFiles.length > 50) {
-            recentFiles.splice(50);
-        }
+        recentFiles = recentFiles.slice(0, 50);
         
         localStorage.setItem(CONFIG.STORAGE_KEYS.RECENT_FILES, JSON.stringify(recentFiles));
     }
 
     // Get recent files
     static getRecentFiles() {
-        const recentStr = localStorage.getItem(CONFIG.STORAGE_KEYS.RECENT_FILES);
-        return recentStr ? JSON.parse(recentStr) : [];
+        const recentFilesStr = localStorage.getItem(CONFIG.STORAGE_KEYS.RECENT_FILES);
+        return recentFilesStr ? JSON.parse(recentFilesStr) : [];
     }
 
     // Clear recent files
     static clearRecentFiles() {
         localStorage.removeItem(CONFIG.STORAGE_KEYS.RECENT_FILES);
+    }
+
+    // Save search history
+    static saveSearchHistory(query) {
+        if (!query.trim()) return;
+        
+        let searchHistory = this.getSearchHistory();
+        
+        // Remove existing entry
+        searchHistory = searchHistory.filter(q => q !== query);
+        
+        // Add to beginning
+        searchHistory.unshift(query);
+        
+        // Keep only last 20 searches
+        searchHistory = searchHistory.slice(0, 20);
+        
+        localStorage.setItem(CONFIG.STORAGE_KEYS.SEARCH_HISTORY, JSON.stringify(searchHistory));
+    }
+
+    // Get search history
+    static getSearchHistory() {
+        const searchHistoryStr = localStorage.getItem(CONFIG.STORAGE_KEYS.SEARCH_HISTORY);
+        return searchHistoryStr ? JSON.parse(searchHistoryStr) : [];
+    }
+
+    // Clear search history
+    static clearSearchHistory() {
+        localStorage.removeItem(CONFIG.STORAGE_KEYS.SEARCH_HISTORY);
     }
 
     // Escape HTML
@@ -298,51 +398,58 @@ class Utils {
     // Get file type for preview
     static getFileTypeForPreview(filename) {
         const ext = this.getFileExtension(filename);
+        const previewTypes = CONFIG.APP_CONFIG.SUPPORTED_PREVIEW_TYPES;
         
-        if (CONFIG.APP_CONFIG.SUPPORTED_PREVIEW_TYPES.image.includes(ext)) {
-            return 'image';
-        } else if (CONFIG.APP_CONFIG.SUPPORTED_PREVIEW_TYPES.video.includes(ext)) {
-            return 'video';
-        } else if (CONFIG.APP_CONFIG.SUPPORTED_PREVIEW_TYPES.audio.includes(ext)) {
-            return 'audio';
-        } else if (CONFIG.APP_CONFIG.SUPPORTED_PREVIEW_TYPES.text.includes(ext)) {
-            return 'text';
-        } else if (CONFIG.APP_CONFIG.SUPPORTED_PREVIEW_TYPES.pdf.includes(ext)) {
-            return 'pdf';
+        for (const [type, extensions] of Object.entries(previewTypes)) {
+            if (extensions.includes(ext)) {
+                return type;
+            }
         }
         
         return null;
     }
 
+    // Check if file is image
+    static isImage(filename) {
+        const ext = this.getFileExtension(filename);
+        return CONFIG.APP_CONFIG.SUPPORTED_PREVIEW_TYPES.image.includes(ext);
+    }
+
+    // Check if file is video
+    static isVideo(filename) {
+        const ext = this.getFileExtension(filename);
+        return CONFIG.APP_CONFIG.SUPPORTED_PREVIEW_TYPES.video.includes(ext);
+    }
+
+    // Check if file is audio
+    static isAudio(filename) {
+        const ext = this.getFileExtension(filename);
+        return CONFIG.APP_CONFIG.SUPPORTED_PREVIEW_TYPES.audio.includes(ext);
+    }
+
     // Sort files
     static sortFiles(files, sortBy, sortOrder) {
-        return [...files].sort((a, b) => {
-            let aVal, bVal;
+        return files.sort((a, b) => {
+            let aValue = a[sortBy];
+            let bValue = b[sortBy];
             
-            switch (sortBy) {
-                case 'name':
-                    aVal = a.name.toLowerCase();
-                    bVal = b.name.toLowerCase();
-                    break;
-                case 'size':
-                    aVal = a.size || 0;
-                    bVal = b.size || 0;
-                    break;
-                case 'date':
-                    aVal = new Date(a.modifiedAt || a.createdAt);
-                    bVal = new Date(b.modifiedAt || b.createdAt);
-                    break;
-                case 'type':
-                    aVal = a.type || '';
-                    bVal = b.type || '';
-                    break;
-                default:
-                    return 0;
+            // Handle different data types
+            if (sortBy === 'size') {
+                aValue = parseInt(aValue) || 0;
+                bValue = parseInt(bValue) || 0;
+            } else if (sortBy === 'modified' || sortBy === 'created') {
+                aValue = new Date(aValue).getTime();
+                bValue = new Date(bValue).getTime();
+            } else {
+                aValue = (aValue || '').toString().toLowerCase();
+                bValue = (bValue || '').toString().toLowerCase();
             }
             
-            if (aVal < bVal) return sortOrder === 'asc' ? -1 : 1;
-            if (aVal > bVal) return sortOrder === 'asc' ? 1 : -1;
-            return 0;
+            if (sortOrder === 'asc') {
+                return aValue < bValue ? -1 : aValue > bValue ? 1 : 0;
+            } else {
+                return aValue > bValue ? -1 : aValue < bValue ? 1 : 0;
+            }
         });
     }
 
@@ -353,10 +460,165 @@ class Utils {
         const term = searchTerm.toLowerCase();
         return files.filter(file => 
             file.name.toLowerCase().includes(term) ||
-            (file.type && file.type.toLowerCase().includes(term))
+            (file.description && file.description.toLowerCase().includes(term))
         );
+    }
+
+    // Generate thumbnail URL
+    static getThumbnailUrl(fileId) {
+        return `${CONFIG.API_ENDPOINTS.files.thumbnail}/${fileId}`;
+    }
+
+    // Generate share URL
+    static generateShareUrl(shareId) {
+        return `${window.location.origin}/share/${shareId}`;
+    }
+
+    // Validate email
+    static isValidEmail(email) {
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        return emailRegex.test(email);
+    }
+
+    // Validate password
+    static isValidPassword(password) {
+        // At least 8 characters, contains letter and number
+        const passwordRegex = /^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d@$!%*#?&]{8,}$/;
+        return passwordRegex.test(password);
+    }
+
+    // Generate random string
+    static generateRandomString(length = 10) {
+        const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+        let result = '';
+        for (let i = 0; i < length; i++) {
+            result += chars.charAt(Math.floor(Math.random() * chars.length));
+        }
+        return result;
+    }
+
+    // Calculate file hash (simple hash for client-side)
+    static async calculateFileHash(file) {
+        const arrayBuffer = await file.arrayBuffer();
+        const hashBuffer = await crypto.subtle.digest('SHA-256', arrayBuffer);
+        const hashArray = Array.from(new Uint8Array(hashBuffer));
+        return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    }
+
+    // Format bytes per second
+    static formatSpeed(bytesPerSecond) {
+        return this.formatFileSize(bytesPerSecond) + '/s';
+    }
+
+    // Get MIME type from extension
+    static getMimeType(filename) {
+        const ext = this.getFileExtension(filename);
+        const mimeTypes = {
+            'jpg': 'image/jpeg',
+            'jpeg': 'image/jpeg',
+            'png': 'image/png',
+            'gif': 'image/gif',
+            'webp': 'image/webp',
+            'bmp': 'image/bmp',
+            'pdf': 'application/pdf',
+            'doc': 'application/msword',
+            'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            'xls': 'application/vnd.ms-excel',
+            'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'ppt': 'application/vnd.ms-powerpoint',
+            'pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+            'txt': 'text/plain',
+            'csv': 'text/csv',
+            'html': 'text/html',
+            'css': 'text/css',
+            'js': 'text/javascript',
+            'json': 'application/json',
+            'xml': 'application/xml',
+            'zip': 'application/zip',
+            'rar': 'application/x-rar-compressed',
+            '7z': 'application/x-7z-compressed',
+            'mp3': 'audio/mpeg',
+            'wav': 'audio/wav',
+            'ogg': 'audio/ogg',
+            'mp4': 'video/mp4',
+            'webm': 'video/webm',
+            'avi': 'video/x-msvideo'
+        };
+        
+        return mimeTypes[ext] || 'application/octet-stream';
+    }
+
+    // Check if device is mobile
+    static isMobile() {
+        return window.innerWidth <= 768;
+    }
+
+    // Handle offline/online events
+    static setupNetworkStatus() {
+        window.addEventListener('online', () => {
+            this.showNotification('인터넷 연결이 복구되었습니다.', 'success');
+        });
+
+        window.addEventListener('offline', () => {
+            this.showNotification('인터넷 연결이 끊어졌습니다.', 'warning');
+        });
+    }
+
+    // Check network status
+    static isOnline() {
+        return navigator.onLine;
+    }
+
+    // Format relative time
+    static formatRelativeTime(date) {
+        const now = new Date();
+        const then = new Date(date);
+        const diffMs = now - then;
+        const diffSecs = Math.floor(diffMs / 1000);
+        const diffMins = Math.floor(diffSecs / 60);
+        const diffHours = Math.floor(diffMins / 60);
+        const diffDays = Math.floor(diffHours / 24);
+
+        if (diffSecs < 60) return '방금 전';
+        if (diffMins < 60) return `${diffMins}분 전`;
+        if (diffHours < 24) return `${diffHours}시간 전`;
+        if (diffDays < 7) return `${diffDays}일 전`;
+        if (diffDays < 30) return `${Math.floor(diffDays / 7)}주 전`;
+        if (diffDays < 365) return `${Math.floor(diffDays / 30)}개월 전`;
+        return `${Math.floor(diffDays / 365)}년 전`;
+    }
+
+    // Retry function with exponential backoff
+    static async retry(fn, retries = 3, delay = 1000) {
+        try {
+            return await fn();
+        } catch (error) {
+            if (retries > 0) {
+                await new Promise(resolve => setTimeout(resolve, delay));
+                return this.retry(fn, retries - 1, delay * 2);
+            }
+            throw error;
+        }
+    }
+
+    // Deep clone object
+    static deepClone(obj) {
+        return JSON.parse(JSON.stringify(obj));
+    }
+
+    // Merge objects
+    static mergeObjects(target, ...sources) {
+        return Object.assign({}, target, ...sources);
+    }
+
+    // Check if object is empty
+    static isEmpty(obj) {
+        return obj == null || Object.keys(obj).length === 0;
     }
 }
 
-// Export Utils
+// Initialize network status monitoring
+Utils.setupNetworkStatus();
+
+// Export Utils class
 window.Utils = Utils; 
