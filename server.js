@@ -6,9 +6,9 @@ const morgan = require('morgan');
 const compression = require('compression');
 const rateLimit = require('express-rate-limit');
 const multer = require('multer');
-const AWS = require('aws-sdk');
 const path = require('path');
 const fs = require('fs');
+const { initializeFirebase } = require('./firebase-config');
 require('dotenv').config();
 
 // Initialize Express app
@@ -20,14 +20,13 @@ if (process.env.NODE_ENV === 'production') {
     app.set('trust proxy', 1);
 }
 
-// Configure AWS
-AWS.config.update({
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
-    region: process.env.AWS_REGION || 'ap-northeast-2'
-});
-
-const s3 = new AWS.S3();
+// Initialize Firebase
+try {
+    // initializeFirebase(); // 로컬에서 임시 비활성화 (Private Key 문제로 인해)
+    console.log('Firebase initialization temporarily disabled for local development');
+} catch (error) {
+    console.error('Firebase initialization failed:', error);
+}
 
 // Connect to MongoDB
 mongoose.connect(process.env.MONGODB_URI, {
@@ -210,7 +209,7 @@ const server = app.listen(PORT, () => {
     console.log(`🚀 Server running on port ${PORT}`);
     console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
     console.log(`📁 Serving static files from: ${path.join(__dirname, 'client')}`);
-    console.log(`☁️  AWS S3 Bucket: ${process.env.S3_BUCKET_NAME}`);
+    console.log(`🔥 Firebase Storage: ${process.env.FIREBASE_STORAGE_BUCKET}`);
     console.log(`🗄️  MongoDB: ${process.env.MONGODB_URI ? 'Connected' : 'Not configured'}`);
 });
 

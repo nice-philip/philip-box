@@ -24,7 +24,7 @@ const fileSchema = new mongoose.Schema({
     },
     extension: {
         type: String,
-        required: true
+        required: function() { return !this.isFolder; }
     },
     isFolder: {
         type: Boolean,
@@ -40,16 +40,12 @@ const fileSchema = new mongoose.Schema({
         ref: 'User',
         required: true
     },
-    // AWS S3 specific fields
-    s3Key: {
+    // Firebase Storage specific fields
+    firebaseStoragePath: {
         type: String,
         required: function() { return !this.isFolder; }
     },
-    s3Bucket: {
-        type: String,
-        required: function() { return !this.isFolder; }
-    },
-    s3Url: {
+    firebaseDownloadUrl: {
         type: String,
         required: function() { return !this.isFolder; }
     },
@@ -103,7 +99,7 @@ const fileSchema = new mongoose.Schema({
     },
     versions: [{
         version: Number,
-        s3Key: String,
+        firebaseStoragePath: String,
         size: Number,
         modifiedAt: Date,
         modifiedBy: {
@@ -150,13 +146,13 @@ const fileSchema = new mongoose.Schema({
 fileSchema.index({ ownerId: 1, isDeleted: 1, status: 1 });
 fileSchema.index({ parentId: 1, isDeleted: 1 });
 fileSchema.index({ name: 'text', originalName: 'text' });
-fileSchema.index({ s3Key: 1 });
+fileSchema.index({ firebaseStoragePath: 1 });
 fileSchema.index({ 'permissions.shareLink.token': 1 });
 fileSchema.index({ createdAt: -1 });
 
 // Virtual for file URL
 fileSchema.virtual('url').get(function() {
-    return this.s3Url || `/api/files/${this._id}/download`;
+    return this.firebaseDownloadUrl || `/api/files/${this._id}/download`;
 });
 
 // Method to get file tree structure
@@ -278,10 +274,18 @@ fileSchema.methods.permanentDelete = async function() {
         });
     }
     
-    // Delete from S3 if file
-    if (!this.isFolder && this.s3Key) {
+    // Delete from Firebase Storage if file
+    if (!this.isFolder && this.firebaseStoragePath) {
         // This would be handled by the service layer
-        // AWS S3 deletion logic would go here
+        // Firebase Storage deletion logic would go here
+        const { getStorageBucket } = require('../firebase-config');
+        try {
+            const bucket = getStorageBucket();
+            const file = bucket.file(this.firebaseStoragePath);
+            await file.delete();
+        } catch (error) {
+            console.error('Error deleting file from Firebase Storage:', error);
+        }
     }
     
     await this.deleteOne();

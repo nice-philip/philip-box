@@ -1,27 +1,19 @@
 const express = require('express');
 const multer = require('multer');
-const AWS = require('aws-sdk');
 const path = require('path');
 const crypto = require('crypto');
 const File = require('../models/File');
 const User = require('../models/User');
 const auth = require('../middleware/auth');
+const { getStorageBucket } = require('../firebase-config');
 
 const router = express.Router();
 
-// Configure AWS S3
-const s3 = new AWS.S3({
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
-    region: process.env.AWS_REGION || 'ap-northeast-2',
-    signatureVersion: 'v4'
-});
-
-// Add debug logging for AWS configuration
-console.log('AWS Configuration:', {
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID ? process.env.AWS_ACCESS_KEY_ID.substring(0, 10) + '...' : 'undefined',
-    region: process.env.AWS_REGION || 'ap-northeast-2',
-    bucket: process.env.S3_BUCKET_NAME
+// Add debug logging for Firebase configuration
+console.log('Firebase Configuration:', {
+    projectId: process.env.FIREBASE_PROJECT_ID,
+    storageBucket: process.env.FIREBASE_STORAGE_BUCKET,
+    clientEmail: process.env.FIREBASE_CLIENT_EMAIL ? process.env.FIREBASE_CLIENT_EMAIL.substring(0, 20) + '...' : 'undefined'
 });
 
 // Configure multer for file uploads
@@ -133,32 +125,46 @@ router.post('/upload', auth, upload.single('file'), async (req, res) => {
         // Generate unique filename
         const fileExtension = path.extname(req.file.originalname);
         const fileName = `${crypto.randomBytes(16).toString('hex')}${fileExtension}`;
-        const s3Key = `uploads/${userId}/${fileName}`;
+        const firebaseStoragePath = `uploads/${userId}/${fileName}`;
 
-        console.log('Uploading to S3:', { 
-            bucket: process.env.S3_BUCKET_NAME, 
-            key: s3Key,
+        console.log('Uploading to Firebase Storage:', { 
+            bucket: process.env.FIREBASE_STORAGE_BUCKET, 
+            path: firebaseStoragePath,
             size: req.file.size
         });
 
-        // Upload to S3
-        const uploadParams = {
-            Bucket: process.env.S3_BUCKET_NAME,
-            Key: s3Key,
-            Body: req.file.buffer,
-            ContentType: req.file.mimetype,
-            Metadata: {
-                originalName: req.file.originalname,
-                uploadedBy: userId.toString()
+        // Upload to Firebase Storage
+        const bucket = getStorageBucket();
+        const file = bucket.file(firebaseStoragePath);
+        
+        const stream = file.createWriteStream({
+            metadata: {
+                contentType: req.file.mimetype,
+                metadata: {
+                    originalName: req.file.originalname,
+                    uploadedBy: userId.toString()
+                }
             }
-        };
+        });
 
-        const uploadResult = await s3.upload(uploadParams).promise();
-        console.log('S3 upload successful:', uploadResult.Location);
+        // Upload file using stream
+        await new Promise((resolve, reject) => {
+            stream.on('error', reject);
+            stream.on('finish', resolve);
+            stream.end(req.file.buffer);
+        });
+
+        // Get download URL
+        const [downloadUrl] = await file.getSignedUrl({
+            action: 'read',
+            expires: '03-17-2025' // 장기간 유효한 URL
+        });
+
+        console.log('Firebase Storage upload successful:', downloadUrl);
 
         console.log('Creating file record in database');
         // Create file record
-        const file = new File({
+        const fileRecord = new File({
             name: req.file.originalname,
             originalName: req.file.originalname,
             path: filePath === '/' ? req.file.originalname : `${filePath}/${req.file.originalname}`,
@@ -166,13 +172,12 @@ router.post('/upload', auth, upload.single('file'), async (req, res) => {
             mimeType: req.file.mimetype,
             extension: fileExtension.slice(1),
             ownerId: userId,
-            s3Key: s3Key,
-            s3Bucket: process.env.S3_BUCKET_NAME,
-            s3Url: uploadResult.Location
+            firebaseStoragePath: firebaseStoragePath,
+            firebaseDownloadUrl: downloadUrl
         });
 
-        await file.save();
-        console.log('File record saved:', file._id);
+        await fileRecord.save();
+        console.log('File record saved:', fileRecord._id);
 
         console.log('Updating user storage usage');
         // Update user storage
@@ -182,12 +187,12 @@ router.post('/upload', auth, upload.single('file'), async (req, res) => {
         res.json({
             message: 'File uploaded successfully',
             file: {
-                id: file._id,
-                name: file.name,
-                size: file.size,
-                type: file.mimeType,
-                path: file.path,
-                createdAt: file.createdAt
+                id: fileRecord._id,
+                name: fileRecord.name,
+                size: fileRecord.size,
+                type: fileRecord.mimeType,
+                path: fileRecord.path,
+                createdAt: fileRecord.createdAt
             }
         });
 
@@ -225,15 +230,15 @@ router.get('/download/:fileId', auth, async (req, res) => {
             });
         }
 
-        // Generate signed URL for S3 download
-        const downloadParams = {
-            Bucket: file.s3Bucket,
-            Key: file.s3Key,
-            Expires: 3600, // 1 hour
-            ResponseContentDisposition: `attachment; filename="${file.originalName}"`
-        };
-
-        const downloadUrl = s3.getSignedUrl('getObject', downloadParams);
+        // Generate signed URL for Firebase Storage download
+        const bucket = getStorageBucket();
+        const firebaseFile = bucket.file(file.firebaseStoragePath);
+        
+        const [downloadUrl] = await firebaseFile.getSignedUrl({
+            action: 'read',
+            expires: Date.now() + 3600 * 1000, // 1 hour from now
+            responseDisposition: `attachment; filename="${file.originalName}"`
+        });
 
         // Update last accessed time
         file.lastAccessedAt = new Date();
