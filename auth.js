@@ -9,35 +9,43 @@ class AuthManager {
 
     // Initialize authentication
     async initializeAuth() {
+        console.log('=== Starting Auth Initialization ===');
+        
         const token = localStorage.getItem(CONFIG.STORAGE_KEYS.TOKEN);
         const user = localStorage.getItem(CONFIG.STORAGE_KEYS.USER);
 
-        console.log('Initializing auth - Token exists:', !!token, 'User exists:', !!user);
+        console.log('Auth check - Token exists:', !!token, 'User exists:', !!user);
 
         if (token && user) {
             try {
+                // Parse user data
                 this.currentUser = JSON.parse(user);
                 this.isLoggedIn = true;
                 
-                console.log('Setting logged in state for user:', this.currentUser.email);
+                console.log('✓ Auth data found, setting logged in state for:', this.currentUser.email);
                 
-                // Update UI immediately
-                this.updateUI();
+                // Update UI immediately with force flag
+                this.updateUI(true);
                 
                 // Hide login modal immediately
                 this.hideLoginModal();
                 
-                // Load user data and initialize app
+                // Enable interface immediately
+                this.enableInterface();
+                
+                // Show main content immediately
+                this.showMainContent();
+                
+                console.log('✓ UI updated, loading user data...');
+                
+                // Load user data in background
                 await this.loadUserData();
                 
-                // Validate token in background (don't await to avoid blocking UI)
+                // Validate token silently (non-blocking)
                 this.validateTokenSilently();
                 
                 this.initializationComplete = true;
                 console.log('✓ Auth initialization complete');
-                
-                // Dispatch auth initialized event
-                this.dispatchAuthEvent('auth-initialized', { authenticated: true });
                 
             } catch (error) {
                 console.error('❌ Auth initialization error:', error);
@@ -49,28 +57,70 @@ class AuthManager {
         }
     }
 
+    // Handle authentication errors
+    handleAuthError() {
+        this.isLoggedIn = false;
+        this.currentUser = null;
+        this.initializationComplete = true;
+        
+        // Clear any invalid data
+        localStorage.removeItem(CONFIG.STORAGE_KEYS.TOKEN);
+        localStorage.removeItem(CONFIG.STORAGE_KEYS.USER);
+        
+        // Update UI
+        this.updateUI(true);
+        this.showLoginModal();
+        this.disableInterface();
+        this.hideMainContent();
+    }
+
     // Load user data and initialize app components
     async loadUserData() {
         try {
+            console.log('Loading user data...');
+            
+            // Wait for file manager to be available
+            await this.waitForFileManager();
+            
             // Initialize file manager
             if (window.fileManager) {
-                console.log('Loading files for authenticated user...');
+                console.log('✓ File manager available, loading files...');
                 await window.fileManager.loadFiles();
                 await window.fileManager.loadStorageInfo();
+                console.log('✓ Files loaded successfully');
             }
             
-            // Initialize other components as needed
-            console.log('User data loaded successfully');
+            console.log('✓ User data loaded successfully');
             
         } catch (error) {
-            console.error('Failed to load user data:', error);
-            // Don't logout immediately, maybe just a network issue
+            console.error('❌ Failed to load user data:', error);
+            // Don't logout immediately for network errors
+            if (error.status === 401 || error.status === 403) {
+                this.handleAuthError();
+            }
         }
+    }
+
+    // Wait for file manager to be available
+    async waitForFileManager(maxWait = 10000) {
+        const startTime = Date.now();
+        
+        while (!window.fileManager && (Date.now() - startTime) < maxWait) {
+            await new Promise(resolve => setTimeout(resolve, 100));
+        }
+        
+        if (!window.fileManager) {
+            console.warn('⚠️ File manager not available after waiting');
+        }
+        
+        return window.fileManager;
     }
 
     // Validate token silently in background
     async validateTokenSilently() {
         try {
+            console.log('Validating token silently...');
+            
             const response = await Utils.apiRequest(CONFIG.API_ENDPOINTS.auth.profile);
             
             if (response && response.user) {
@@ -78,16 +128,16 @@ class AuthManager {
                 this.currentUser = response.user;
                 localStorage.setItem(CONFIG.STORAGE_KEYS.USER, JSON.stringify(this.currentUser));
                 this.updateUI();
-                console.log('Token validation successful');
+                console.log('✓ Token validation successful');
             }
             
         } catch (error) {
-            console.warn('Token validation failed:', error);
+            console.warn('⚠️ Token validation failed:', error);
             
             // Only logout if it's a clear auth error (401, 403)
             if (error.status === 401 || error.status === 403) {
-                console.log('Token expired or invalid, logging out');
-                this.logout();
+                console.log('❌ Token expired or invalid, logging out');
+                this.handleAuthError();
             }
             // For other errors (network, 500, etc.), keep user logged in
         }
@@ -101,7 +151,7 @@ class AuthManager {
             this.updateUI();
         } catch (error) {
             console.error('Token validation failed:', error);
-            this.logout();
+            this.handleAuthError();
         }
     }
 
@@ -121,10 +171,13 @@ class AuthManager {
 
             this.currentUser = response.user;
             this.isLoggedIn = true;
+            this.initializationComplete = true;
 
             // Update UI
-            this.updateUI();
+            this.updateUI(true);
             this.hideLoginModal();
+            this.enableInterface();
+            this.showMainContent();
 
             Utils.showNotification(CONFIG.SUCCESS_MESSAGES.LOGIN_SUCCESS);
             
@@ -155,10 +208,13 @@ class AuthManager {
 
             this.currentUser = response.user;
             this.isLoggedIn = true;
+            this.initializationComplete = true;
 
             // Update UI
-            this.updateUI();
+            this.updateUI(true);
             this.hideRegisterModal();
+            this.enableInterface();
+            this.showMainContent();
 
             Utils.showNotification(CONFIG.SUCCESS_MESSAGES.REGISTRATION_SUCCESS);
             
@@ -185,115 +241,183 @@ class AuthManager {
         } catch (error) {
             console.error('Logout API call failed:', error);
         } finally {
-            // Clear local storage
-            localStorage.removeItem(CONFIG.STORAGE_KEYS.TOKEN);
-            localStorage.removeItem(CONFIG.STORAGE_KEYS.USER);
-            localStorage.removeItem(CONFIG.STORAGE_KEYS.PREFERENCES);
-            localStorage.removeItem(CONFIG.STORAGE_KEYS.RECENT_FILES);
-
-            this.currentUser = null;
-            this.isLoggedIn = false;
-
-            // Update UI
-            this.updateUI();
-            this.showLoginModal();
-
+            this.handleAuthError();
             Utils.showNotification(CONFIG.SUCCESS_MESSAGES.LOGOUT_SUCCESS);
         }
     }
 
     // Update UI based on authentication state
-    updateUI() {
-        console.log('Updating UI - isLoggedIn:', this.isLoggedIn, 'currentUser:', this.currentUser);
+    updateUI(force = false) {
+        // Skip UI updates if initialization is not complete (unless forced)
+        if (!this.initializationComplete && !force) {
+            console.log('Skipping UI update - initialization not complete');
+            return;
+        }
         
+        console.log('=== Updating UI ===');
+        console.log('Auth state - isLoggedIn:', this.isLoggedIn, 'currentUser:', this.currentUser?.email);
+        
+        if (this.isLoggedIn && this.currentUser) {
+            console.log('✓ Showing authenticated UI');
+            this.showAuthenticatedUI();
+        } else {
+            console.log('✓ Showing login UI');
+            this.showLoginUI();
+        }
+    }
+
+    // Show authenticated UI
+    showAuthenticatedUI() {
+        // Hide auth modals
+        this.hideAllModals();
+        
+        // Show main content
+        this.showMainContent();
+        
+        // Update user info
+        this.updateUserInfo();
+        
+        // Enable interface
+        this.enableInterface();
+        
+        console.log('✓ Authenticated UI shown');
+    }
+
+    // Show login UI
+    showLoginUI() {
+        // Hide main content
+        this.hideMainContent();
+        
+        // Show login modal
+        this.showLoginModal();
+        
+        // Disable interface
+        this.disableInterface();
+        
+        console.log('✓ Login UI shown');
+    }
+
+    // Hide all modals
+    hideAllModals() {
         const loginModal = document.getElementById('loginModal');
         const registerModal = document.getElementById('registerModal');
+        
+        if (loginModal) {
+            loginModal.style.display = 'none';
+            loginModal.classList.remove('active');
+        }
+        if (registerModal) {
+            registerModal.style.display = 'none';
+            registerModal.classList.remove('active');
+        }
+    }
+
+    // Show main content
+    showMainContent() {
+        const mainContent = document.querySelector('.main-content');
+        const body = document.body;
+        
+        if (mainContent) {
+            mainContent.style.display = 'flex';
+            mainContent.style.visibility = 'visible';
+            mainContent.style.opacity = '1';
+        }
+        
+        if (body) {
+            body.classList.add('logged-in');
+            body.classList.remove('logged-out');
+        }
+        
+        console.log('✓ Main content shown');
+    }
+
+    // Hide main content
+    hideMainContent() {
+        const mainContent = document.querySelector('.main-content');
+        const body = document.body;
+        
+        if (mainContent) {
+            mainContent.style.display = 'none';
+            mainContent.style.visibility = 'hidden';
+            mainContent.style.opacity = '0';
+        }
+        
+        if (body) {
+            body.classList.add('logged-out');
+            body.classList.remove('logged-in');
+        }
+        
+        console.log('✓ Main content hidden');
+    }
+
+    // Update user info in UI
+    updateUserInfo() {
         const userName = document.getElementById('userName');
         const userEmail = document.getElementById('userEmail');
         const userAvatar = document.getElementById('userAvatar');
-        const mainContent = document.querySelector('.main-content');
         
-        if (this.isLoggedIn && this.currentUser) {
-            // User is logged in - show main interface
-            console.log('Showing authenticated UI for:', this.currentUser.email);
-            
-            // Hide auth modals
-            if (loginModal) {
-                loginModal.style.display = 'none';
-                loginModal.classList.remove('active');
-            }
-            if (registerModal) {
-                registerModal.style.display = 'none';
-                registerModal.classList.remove('active');
-            }
-            
-            // Show main content
-            if (mainContent) {
-                mainContent.style.display = 'flex';
-                mainContent.style.visibility = 'visible';
-            }
-            
-            // Update user info
+        if (this.currentUser) {
             if (userName) userName.textContent = this.currentUser.name || this.currentUser.email;
             if (userEmail) userEmail.textContent = this.currentUser.email;
             if (userAvatar) {
                 userAvatar.innerHTML = `<i class="fas fa-user"></i>`;
                 userAvatar.title = this.currentUser.name || this.currentUser.email;
             }
-            
-            // Enable all interactive elements
-            this.enableInterface();
-            
-        } else {
-            // User is not logged in - show login interface
-            console.log('Showing login UI');
-            
-            // Hide main content
-            if (mainContent) {
-                mainContent.style.display = 'none';
-                mainContent.style.visibility = 'hidden';
-            }
-            
-            // Show login modal if not already visible
-            if (loginModal && loginModal.style.display !== 'block') {
-                this.showLoginModal();
-            }
-            
-            // Disable interface
-            this.disableInterface();
         }
+        
+        console.log('✓ User info updated');
     }
 
     // Enable interface elements
     enableInterface() {
         const buttons = document.querySelectorAll('button:not(.modal-close)');
         const inputs = document.querySelectorAll('input:not([id*="login"]):not([id*="register"])');
+        const navItems = document.querySelectorAll('.nav-item');
         
         buttons.forEach(btn => {
             btn.disabled = false;
             btn.style.opacity = '1';
+            btn.style.pointerEvents = 'auto';
         });
         
         inputs.forEach(input => {
             input.disabled = false;
             input.style.opacity = '1';
+            input.style.pointerEvents = 'auto';
         });
+        
+        navItems.forEach(item => {
+            item.style.pointerEvents = 'auto';
+            item.style.opacity = '1';
+        });
+        
+        console.log('✓ Interface enabled');
     }
 
     // Disable interface elements
     disableInterface() {
         const buttons = document.querySelectorAll('button:not(.modal-close):not([id*="login"]):not([id*="register"])');
         const inputs = document.querySelectorAll('input:not([id*="login"]):not([id*="register"])');
+        const navItems = document.querySelectorAll('.nav-item');
         
         buttons.forEach(btn => {
             btn.disabled = true;
             btn.style.opacity = '0.5';
+            btn.style.pointerEvents = 'none';
         });
         
         inputs.forEach(input => {
             input.disabled = true;
             input.style.opacity = '0.5';
+            input.style.pointerEvents = 'none';
         });
+        
+        navItems.forEach(item => {
+            item.style.pointerEvents = 'none';
+            item.style.opacity = '0.5';
+        });
+        
+        console.log('✓ Interface disabled');
     }
 
     // Show login modal
@@ -335,6 +459,9 @@ class AuthManager {
     // Load initial data after login
     async loadInitialData() {
         try {
+            // Wait for file manager to be available
+            await this.waitForFileManager();
+            
             // Only load if fileManager is available
             if (window.fileManager) {
                 await Promise.all([
@@ -354,41 +481,12 @@ class AuthManager {
 
     // Check if user is authenticated
     isAuthenticated() {
-        return this.isLoggedIn;
-    }
-
-    // Handle authentication errors
-    handleAuthError() {
-        this.isLoggedIn = false;
-        this.currentUser = null;
-        this.initializationComplete = true;
-        
-        // Clear any invalid data
-        localStorage.removeItem(CONFIG.STORAGE_KEYS.TOKEN);
-        localStorage.removeItem(CONFIG.STORAGE_KEYS.USER);
-        
-        // Update UI
-        this.updateUI(true);
-        this.showLoginModal();
-        this.disableInterface();
-        this.hideMainContent();
-        
-        // Dispatch auth initialized event
-        this.dispatchAuthEvent('auth-initialized', { authenticated: false });
+        return this.isLoggedIn && this.currentUser && this.initializationComplete;
     }
 
     // Get initialization status
     isInitialized() {
         return this.initializationComplete;
-    }
-
-    // Dispatch authentication events
-    dispatchAuthEvent(eventName, data) {
-        if (window.eventBus) {
-            window.eventBus.dispatchEvent(new CustomEvent(eventName, {
-                detail: data
-            }));
-        }
     }
 }
 

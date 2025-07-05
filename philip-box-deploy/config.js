@@ -17,7 +17,13 @@ const API_ENDPOINTS = {
         move: `${API_BASE_URL}/files/move`,
         create_folder: `${API_BASE_URL}/files/folder`,
         share: `${API_BASE_URL}/files/share`,
-        search: `${API_BASE_URL}/files/search`
+        search: `${API_BASE_URL}/files/search`,
+        details: `${API_BASE_URL}/files/details`,
+        thumbnail: `${API_BASE_URL}/files/thumbnail`,
+        important: `${API_BASE_URL}/files/important`,
+        recent: `${API_BASE_URL}/files/recent`,
+        shared: `${API_BASE_URL}/files/shared`,
+        ai_search: `${API_BASE_URL}/files/ai-search`
     },
     storage: {
         usage: `${API_BASE_URL}/storage/usage`
@@ -49,6 +55,24 @@ const APP_CONFIG = {
         audio: ['mp3', 'wav', 'ogg'],
         text: ['txt', 'csv', 'html', 'css', 'js', 'json', 'xml'],
         pdf: ['pdf']
+    },
+    THUMBNAIL_CONFIG: {
+        enabled: true,
+        maxWidth: 200,
+        maxHeight: 200,
+        quality: 0.8,
+        supportedTypes: ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'mp4', 'webm', 'ogg']
+    },
+    SHARE_CONFIG: {
+        defaultPermission: 'view',
+        allowPublicSharing: true,
+        maxExpiryDays: 365,
+        enablePasswordProtection: true
+    },
+    SEARCH_CONFIG: {
+        enableAISearch: true,
+        maxResults: 50,
+        searchDelay: 300
     }
 };
 
@@ -104,7 +128,10 @@ const ERROR_MESSAGES = {
     STORAGE_FULL: '저장 공간이 부족합니다.',
     INVALID_CREDENTIALS: '이메일 또는 비밀번호가 올바르지 않습니다.',
     REGISTRATION_FAILED: '회원가입에 실패했습니다.',
-    PASSWORD_MISMATCH: '비밀번호가 일치하지 않습니다.'
+    PASSWORD_MISMATCH: '비밀번호가 일치하지 않습니다.',
+    AI_SEARCH_FAILED: 'AI 검색에 실패했습니다.',
+    THUMBNAIL_GENERATION_FAILED: '썸네일 생성에 실패했습니다.',
+    SHARE_LINK_GENERATION_FAILED: '공유 링크 생성에 실패했습니다.'
 };
 
 // Success Messages
@@ -118,7 +145,11 @@ const SUCCESS_MESSAGES = {
     SHARE_SUCCESS: '파일이 공유되었습니다.',
     LOGIN_SUCCESS: '로그인되었습니다.',
     LOGOUT_SUCCESS: '로그아웃되었습니다.',
-    REGISTRATION_SUCCESS: '회원가입이 완료되었습니다.'
+    REGISTRATION_SUCCESS: '회원가입이 완료되었습니다.',
+    SHARE_LINK_COPIED: '공유 링크가 복사되었습니다.',
+    IMPORTANT_MARKED: '중요 표시되었습니다.',
+    IMPORTANT_UNMARKED: '중요 표시가 해제되었습니다.',
+    DESCRIPTION_SAVED: '설명이 저장되었습니다.'
 };
 
 // Local Storage Keys
@@ -126,7 +157,9 @@ const STORAGE_KEYS = {
     TOKEN: 'dropbox_token',
     USER: 'dropbox_user',
     PREFERENCES: 'dropbox_preferences',
-    RECENT_FILES: 'dropbox_recent_files'
+    RECENT_FILES: 'dropbox_recent_files',
+    IMPORTANT_FILES: 'dropbox_important_files',
+    SEARCH_HISTORY: 'dropbox_search_history'
 };
 
 // View Modes
@@ -140,7 +173,21 @@ const FILE_SECTIONS = {
     FILES: 'files',
     SHARED: 'shared',
     RECENT: 'recent',
+    IMPORTANT: 'important',
     DELETED: 'deleted'
+};
+
+// Share Types
+const SHARE_TYPES = {
+    PRIVATE: 'private',
+    PUBLIC: 'public'
+};
+
+// Share Permissions
+const SHARE_PERMISSIONS = {
+    VIEW: 'view',
+    EDIT: 'edit',
+    COMMENT: 'comment'
 };
 
 // Export configuration object
@@ -153,5 +200,7 @@ window.CONFIG = {
     SUCCESS_MESSAGES,
     STORAGE_KEYS,
     VIEW_MODES,
-    FILE_SECTIONS
+    FILE_SECTIONS,
+    SHARE_TYPES,
+    SHARE_PERMISSIONS
 }; 

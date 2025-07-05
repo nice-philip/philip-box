@@ -115,6 +115,12 @@ class DropboxClone {
                 this.onUserLogout();
             }
         });
+
+        // Auth initialization completed
+        eventBus.addEventListener('auth-initialized', (e) => {
+            console.log('Auth initialization completed');
+            this.markAppAsReady();
+        });
     }
 
     // Setup global error handlers
@@ -348,6 +354,9 @@ class DropboxClone {
 
         // Setup periodic refresh
         this.setupPeriodicRefresh();
+        
+        // Mark app as ready
+        this.markAppAsReady();
     }
 
     onUserLogout() {
@@ -358,6 +367,9 @@ class DropboxClone {
         
         // Clear cached data
         this.clearCachedData();
+        
+        // Remove ready state
+        this.removeAppReadyState();
     }
 
     onConnectivityLost() {
@@ -493,6 +505,31 @@ class DropboxClone {
             }
         }
     }
+
+    // Mark app as ready
+    markAppAsReady() {
+        const mainContent = document.querySelector('.main-content');
+        if (mainContent) {
+            mainContent.classList.add('ready');
+        }
+        
+        // Trigger app ready event
+        if (window.eventBus) {
+            window.eventBus.dispatchEvent(new CustomEvent('app-ready'));
+        }
+        
+        console.log('App marked as ready');
+    }
+
+    // Remove app ready state
+    removeAppReadyState() {
+        const mainContent = document.querySelector('.main-content');
+        if (mainContent) {
+            mainContent.classList.remove('ready');
+        }
+        
+        console.log('App ready state removed');
+    }
 }
 
 // Initialize app when DOM is ready
@@ -520,17 +557,6 @@ document.addEventListener('visibilitychange', function() {
         if (window.dropboxClone?.managers?.auth?.isAuthenticated()) {
             window.dropboxClone.managers.file?.loadStorageInfo();
         }
-    }
-});
-
-// Handle page unload
-window.addEventListener('beforeunload', function(e) {
-    // Check for ongoing uploads
-    if (window.uploadManager?.isUploadInProgress()) {
-        const message = '업로드가 진행 중입니다. 페이지를 떠나시겠습니까?';
-        e.preventDefault();
-        e.returnValue = message;
-        return message;
     }
 });
 
