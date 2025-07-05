@@ -562,46 +562,62 @@ class FileManager {
             
             if (this.currentSection === CONFIG.FILE_SECTIONS.IMPORTANT) {
                 // Load important files from localStorage
-                const importantFileIds = Array.from(this.importantFiles);
-                this.currentFiles = []; // Will be populated by finding files with important IDs
-                
-                // In a real app, you would load files and filter by important IDs
-                // For now, create placeholder files for important ones
-                const allFiles = this.getAllStoredFiles();
-                this.currentFiles = allFiles.filter(file => importantFileIds.includes(file.id));
+                this.currentFiles = this.getAllStoredFiles().filter(file => 
+                    this.importantFiles.has(file.id)
+                );
                 this.currentPath = '/'; // Reset path for important section
                 
                 this.renderFiles();
                 this.updateBreadcrumb();
                 return;
             }
-
-            // For regular files section, try API first, then fallback to localStorage
-            let endpoint = CONFIG.API_ENDPOINTS.files.list;
-            let params = { path: encodeURIComponent(path) };
-
-            // Use different endpoints based on current section
-            switch (this.currentSection) {
-                case CONFIG.FILE_SECTIONS.DELETED:
-                    endpoint = CONFIG.API_ENDPOINTS.files.list;
-                    params.deleted = 'true';
-                    break;
+            
+            if (this.currentSection === CONFIG.FILE_SECTIONS.DELETED) {
+                // Load deleted files from localStorage
+                this.currentFiles = JSON.parse(localStorage.getItem('deleted_files') || '[]');
+                this.currentPath = '/'; // Reset path for deleted section
+                
+                this.renderFiles();
+                this.updateBreadcrumb();
+                return;
             }
 
+            // For main FILES section, load both API and local files
+            this.currentPath = path;
+            this.currentFiles = [];
+            
+            // Try to load from API first
             try {
-                const queryString = new URLSearchParams(params).toString();
-                const response = await Utils.apiRequest(`${endpoint}?${queryString}`);
-
-                this.currentFiles = response.files || [];
-                this.currentPath = path;
-                
-            } catch (apiError) {
-                console.warn('API request failed, using localStorage fallback:', apiError);
-                
-                // Fallback to localStorage for demo purposes
-                this.currentFiles = this.getStoredFilesForPath(path);
-                this.currentPath = path;
+                const response = await Utils.apiRequest(`${CONFIG.API_ENDPOINTS.files.list}?path=${encodeURIComponent(path)}`);
+                if (response && response.files) {
+                    this.currentFiles = response.files;
+                    console.log('Loaded files from API:', this.currentFiles.length);
+                }
+            } catch (error) {
+                console.warn('API load failed, using local storage:', error);
             }
+            
+            // Always load and merge local files
+            const localFiles = this.getStoredFilesForPath(path);
+            console.log('Loading local files for path:', path, 'found:', localFiles.length);
+            
+            // Merge API files with local files (remove duplicates by name)
+            const existingFileNames = new Set(this.currentFiles.map(f => f.name));
+            const uniqueLocalFiles = localFiles.filter(file => !existingFileNames.has(file.name));
+            
+            this.currentFiles = [...this.currentFiles, ...uniqueLocalFiles];
+            
+            // Sort files
+            this.currentFiles.sort((a, b) => {
+                // Sort folders first, then files
+                if (a.type === 'folder' && b.type !== 'folder') return -1;
+                if (a.type !== 'folder' && b.type === 'folder') return 1;
+                
+                // Then sort by name
+                return a.name.localeCompare(b.name);
+            });
+            
+            console.log('Total files loaded:', this.currentFiles.length);
             
             this.renderFiles();
             this.updateBreadcrumb();
@@ -609,49 +625,40 @@ class FileManager {
         } catch (error) {
             console.error('Failed to load files:', error);
             Utils.showNotification('파일을 불러오는데 실패했습니다.', 'error');
+            
+            // Fallback to local files only
+            this.currentFiles = this.getStoredFilesForPath(path);
+            this.renderFiles();
+            this.updateBreadcrumb();
         } finally {
             Utils.showLoading(false);
         }
     }
 
-    // Get all stored files from various sources
+    // Get all stored files from localStorage
     getAllStoredFiles() {
-        const allFiles = [];
-        
-        try {
-            // Add shared files
-            const sharedFiles = this.loadSharedFiles();
-            allFiles.push(...sharedFiles);
-            
-            // Add recent files
-            allFiles.push(...this.recentFiles);
-            
-            // Add any other stored files
-            // (in a real app, this would come from a proper storage system)
-            
-        } catch (error) {
-            console.error('Error getting all stored files:', error);
-        }
-        
-        return allFiles;
+        const storedFiles = JSON.parse(localStorage.getItem('stored_files') || '[]');
+        return storedFiles.map(file => ({
+            ...file,
+            isLocal: true
+        }));
     }
 
-    // Get stored files for a specific path (fallback when API is not available)
+    // Get stored files for specific path
     getStoredFilesForPath(path) {
-        // This is a demo implementation
-        // In a real app, you would have a proper file storage system
-        return [
-            {
-                id: 'demo-file-1',
-                name: 'sample.txt',
-                size: 1024,
-                type: 'file',
-                mimeType: 'text/plain',
-                modified: new Date().toISOString(),
-                created: new Date().toISOString(),
-                path: path + '/sample.txt'
-            }
-        ];
+        const allFiles = this.getAllStoredFiles();
+        
+        // Normalize path
+        const normalizedPath = path.replace(/\/+/g, '/').replace(/\/$/, '') || '/';
+        
+        // Filter files by path
+        const filesInPath = allFiles.filter(file => {
+            const filePath = (file.path || '/').replace(/\/+/g, '/').replace(/\/$/, '') || '/';
+            return filePath === normalizedPath;
+        });
+        
+        console.log('Files in path', normalizedPath, ':', filesInPath.length);
+        return filesInPath;
     }
 
     // Load storage info
@@ -809,28 +816,229 @@ class FileManager {
         return fileElement;
     }
 
-    // Generate thumbnail HTML
+    // Generate thumbnail HTML with client-side generation
     generateThumbnailHtml(file) {
-        if (!CONFIG.APP_CONFIG.THUMBNAIL_CONFIG.enabled) return null;
-
+        if (!Utils.isThumbnailSupported(file.name)) {
+            return null;
+        }
+        
         const extension = file.name.split('.').pop().toLowerCase();
-        const supportedTypes = CONFIG.APP_CONFIG.THUMBNAIL_CONFIG.supportedTypes;
-
-        if (!supportedTypes.includes(extension)) return null;
-
-        // For images, show thumbnail
+        const thumbnailId = `thumb-${file.id}`;
+        
+        // For demo purposes, create thumbnail placeholder
         if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'].includes(extension)) {
-            return `<img src="${CONFIG.API_ENDPOINTS.files.thumbnail}/${file.id}" alt="${file.name}" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
-                    <i class="fas fa-image" style="display: none;"></i>`;
+            // Image thumbnail
+            const thumbnailHtml = `
+                <div class="file-thumbnail" id="${thumbnailId}">
+                    <img src="${this.generateImageThumbnail(file)}" 
+                         alt="${file.name}" 
+                         loading="lazy"
+                         onload="this.style.opacity=1"
+                         onerror="this.style.display='none'">
+                </div>
+            `;
+            return thumbnailHtml;
+        } else if (['mp4', 'webm', 'ogg', 'avi', 'mov'].includes(extension)) {
+            // Video thumbnail
+            const thumbnailHtml = `
+                <div class="file-thumbnail video-thumbnail" id="${thumbnailId}">
+                    <div class="video-thumbnail-placeholder">
+                        <i class="fas fa-video"></i>
+                        <span class="video-duration">${this.formatDuration(file.duration || 0)}</span>
+                    </div>
+                </div>
+            `;
+            return thumbnailHtml;
         }
-
-        // For videos, show video thumbnail
-        if (['mp4', 'webm', 'ogg'].includes(extension)) {
-            return `<img src="${CONFIG.API_ENDPOINTS.files.thumbnail}/${file.id}" alt="${file.name}" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
-                    <i class="fas fa-video" style="display: none;"></i>`;
-        }
-
+        
         return null;
+    }
+
+    // Generate image thumbnail for demo purposes
+    generateImageThumbnail(file) {
+        // For demo purposes, create a placeholder image with file info
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        
+        canvas.width = 200;
+        canvas.height = 150;
+        
+        // Create gradient background
+        const gradient = ctx.createLinearGradient(0, 0, 200, 150);
+        gradient.addColorStop(0, '#667eea');
+        gradient.addColorStop(1, '#764ba2');
+        
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, 200, 150);
+        
+        // Add file type icon
+        ctx.fillStyle = 'white';
+        ctx.font = '32px FontAwesome';
+        ctx.textAlign = 'center';
+        ctx.fillText('🖼️', 100, 70);
+        
+        // Add file name
+        ctx.font = '12px Arial';
+        ctx.fillStyle = 'white';
+        ctx.textAlign = 'center';
+        const fileName = file.name.length > 20 ? file.name.substring(0, 17) + '...' : file.name;
+        ctx.fillText(fileName, 100, 120);
+        
+        // Add file size
+        ctx.font = '10px Arial';
+        ctx.fillText(Utils.formatFileSize(file.size), 100, 135);
+        
+        return canvas.toDataURL();
+    }
+
+    // Generate video thumbnail placeholder
+    generateVideoThumbnail(file) {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        
+        canvas.width = 200;
+        canvas.height = 150;
+        
+        // Create gradient background
+        const gradient = ctx.createLinearGradient(0, 0, 200, 150);
+        gradient.addColorStop(0, '#ff6b6b');
+        gradient.addColorStop(1, '#ee5a24');
+        
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, 200, 150);
+        
+        // Add play button
+        ctx.fillStyle = 'white';
+        ctx.beginPath();
+        ctx.moveTo(80, 50);
+        ctx.lineTo(80, 100);
+        ctx.lineTo(120, 75);
+        ctx.closePath();
+        ctx.fill();
+        
+        // Add file name
+        ctx.font = '12px Arial';
+        ctx.fillStyle = 'white';
+        ctx.textAlign = 'center';
+        const fileName = file.name.length > 20 ? file.name.substring(0, 17) + '...' : file.name;
+        ctx.fillText(fileName, 100, 120);
+        
+        // Add file size
+        ctx.font = '10px Arial';
+        ctx.fillText(Utils.formatFileSize(file.size), 100, 135);
+        
+        return canvas.toDataURL();
+    }
+
+    // Format duration for videos
+    formatDuration(seconds) {
+        const mins = Math.floor(seconds / 60);
+        const secs = Math.floor(seconds % 60);
+        return `${mins}:${secs.toString().padStart(2, '0')}`;
+    }
+
+    // Generate real thumbnail from file (for uploaded files)
+    async generateRealThumbnail(file, fileObject) {
+        if (!fileObject || !Utils.isThumbnailSupported(file.name)) {
+            return null;
+        }
+        
+        const extension = file.name.split('.').pop().toLowerCase();
+        
+        if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'].includes(extension)) {
+            return await this.generateImageThumbnailFromFile(fileObject);
+        } else if (['mp4', 'webm', 'ogg'].includes(extension)) {
+            return await this.generateVideoThumbnailFromFile(fileObject);
+        }
+        
+        return null;
+    }
+
+    // Generate image thumbnail from actual file
+    async generateImageThumbnailFromFile(fileObject) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            
+            reader.onload = (e) => {
+                const img = new Image();
+                
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    const ctx = canvas.getContext('2d');
+                    
+                    // Calculate thumbnail size (maintain aspect ratio)
+                    const maxWidth = 200;
+                    const maxHeight = 150;
+                    
+                    let { width, height } = img;
+                    
+                    if (width > height) {
+                        if (width > maxWidth) {
+                            height = (height * maxWidth) / width;
+                            width = maxWidth;
+                        }
+                    } else {
+                        if (height > maxHeight) {
+                            width = (width * maxHeight) / height;
+                            height = maxHeight;
+                        }
+                    }
+                    
+                    canvas.width = width;
+                    canvas.height = height;
+                    
+                    ctx.drawImage(img, 0, 0, width, height);
+                    
+                    resolve(canvas.toDataURL());
+                };
+                
+                img.onerror = () => {
+                    reject(new Error('Failed to load image'));
+                };
+                
+                img.src = e.target.result;
+            };
+            
+            reader.onerror = () => {
+                reject(new Error('Failed to read file'));
+            };
+            
+            reader.readAsDataURL(fileObject);
+        });
+    }
+
+    // Generate video thumbnail from actual file
+    async generateVideoThumbnailFromFile(fileObject) {
+        return new Promise((resolve, reject) => {
+            const video = document.createElement('video');
+            video.style.display = 'none';
+            document.body.appendChild(video);
+            
+            video.onloadedmetadata = () => {
+                // Seek to 10% of video duration for thumbnail
+                video.currentTime = video.duration * 0.1;
+            };
+            
+            video.onseeked = () => {
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                
+                canvas.width = 200;
+                canvas.height = 150;
+                
+                ctx.drawImage(video, 0, 0, 200, 150);
+                
+                document.body.removeChild(video);
+                resolve(canvas.toDataURL());
+            };
+            
+            video.onerror = () => {
+                document.body.removeChild(video);
+                reject(new Error('Failed to load video'));
+            };
+            
+            video.src = URL.createObjectURL(fileObject);
+        });
     }
 
     // Get file icon
@@ -1002,13 +1210,16 @@ class FileManager {
             this.isDownloading = true;
             window.downloadInProgress = true; // Global flag
             
-            // Temporarily completely disable beforeunload
-            const originalBeforeUnload = window.onbeforeunload;
+            // Completely disable beforeunload for download
             window.onbeforeunload = null;
+            
+            // Remove any event listeners temporarily
+            const handleBeforeUnload = () => {};
+            window.addEventListener('beforeunload', handleBeforeUnload);
             
             Utils.showNotification(`${file.name} 다운로드 준비 중...`, 'info');
             
-            // Use the most compatible download method
+            // Try download with demo file
             await this.downloadFileDirect(file);
             
             Utils.showNotification(`${file.name} 다운로드 완료`, 'success');
@@ -1032,12 +1243,22 @@ class FileManager {
     // Direct download method (most reliable)
     async downloadFileDirect(file) {
         try {
-            // Method 1: Create download link with download attribute
-            const response = await Utils.apiRequest(
-                `${CONFIG.API_ENDPOINTS.files.download}/${file.id}`
-            );
+            let downloadUrl;
             
-            const downloadUrl = response.downloadUrl || response.url || '#';
+            // Try API first
+            try {
+                const response = await Utils.apiRequest(
+                    `${CONFIG.API_ENDPOINTS.files.download}/${file.id}`
+                );
+                downloadUrl = response.downloadUrl || response.url;
+            } catch (error) {
+                console.warn('API download failed, using demo file:', error);
+                
+                // Create demo file for download
+                const demoContent = this.generateDemoFileContent(file);
+                const blob = new Blob([demoContent], { type: file.mimeType || 'text/plain' });
+                downloadUrl = URL.createObjectURL(blob);
+            }
             
             // Create a temporary download link
             const link = document.createElement('a');
@@ -1052,8 +1273,11 @@ class FileManager {
             // Disable any navigation warnings during click
             const originalConfirm = window.confirm;
             const originalAlert = window.alert;
+            const originalBeforeUnload = window.onbeforeunload;
+            
             window.confirm = () => true;
             window.alert = () => {};
+            window.onbeforeunload = null;
             
             // Force click without user interaction detection
             const clickEvent = new MouseEvent('click', {
@@ -1068,13 +1292,59 @@ class FileManager {
             setTimeout(() => {
                 window.confirm = originalConfirm;
                 window.alert = originalAlert;
+                window.onbeforeunload = originalBeforeUnload;
                 document.body.removeChild(link);
-            }, 1000);
+                
+                // Clean up blob URL if it was created
+                if (downloadUrl.startsWith('blob:')) {
+                    URL.revokeObjectURL(downloadUrl);
+                }
+            }, 2000);
             
         } catch (error) {
             console.error('Direct download failed:', error);
             // Fallback to iframe method
             await this.downloadViaIframe(file);
+        }
+    }
+
+    // Generate demo file content for download
+    generateDemoFileContent(file) {
+        const fileExtension = file.name.split('.').pop().toLowerCase();
+        
+        switch (fileExtension) {
+            case 'txt':
+                return `이것은 ${file.name} 파일의 데모 내용입니다.\n\n파일 정보:\n- 이름: ${file.name}\n- 크기: ${Utils.formatFileSize(file.size)}\n- 생성일: ${new Date().toLocaleDateString()}\n\nPhilip Box 드롭박스 클론에서 생성된 데모 파일입니다.`;
+            
+            case 'html':
+                return `<!DOCTYPE html>
+<html>
+<head>
+    <title>${file.name}</title>
+    <meta charset="utf-8">
+</head>
+<body>
+    <h1>${file.name}</h1>
+    <p>이것은 Philip Box 드롭박스 클론에서 생성된 데모 HTML 파일입니다.</p>
+    <p>파일 크기: ${Utils.formatFileSize(file.size)}</p>
+    <p>생성일: ${new Date().toLocaleDateString()}</p>
+</body>
+</html>`;
+            
+            case 'json':
+                return JSON.stringify({
+                    fileName: file.name,
+                    fileSize: file.size,
+                    createdAt: new Date().toISOString(),
+                    source: 'Philip Box Demo',
+                    content: 'This is a demo file generated by Philip Box'
+                }, null, 2);
+            
+            case 'csv':
+                return `파일명,크기,생성일,소스\n${file.name},${file.size},${new Date().toLocaleDateString()},Philip Box Demo`;
+            
+            default:
+                return `${file.name}\n\n이것은 Philip Box 드롭박스 클론에서 생성된 데모 파일입니다.\n파일 크기: ${Utils.formatFileSize(file.size)}\n생성일: ${new Date().toLocaleDateString()}`;
         }
     }
 
@@ -1357,31 +1627,58 @@ class FileManager {
         }
     }
 
-    // Generate local share URL (fallback when API is not available)
+    // Generate local share URL with complete file information
     generateLocalShareUrl(file, shareType, permissions, expiry) {
-        // Generate a unique share token
-        const shareToken = this.generateShareToken();
+        const shareId = this.generateShareToken();
+        const shareUrl = `${window.location.origin}/share.html#${shareId}`;
         
-        // Create share URL with file info
-        const baseUrl = window.location.origin;
-        const shareId = `${file.id}_${shareToken}`;
-        
-        // Store detailed share info
-        const shareInfo = {
+        // Store complete share information
+        const shareData = {
+            shareId: shareId,
             fileId: file.id,
             fileName: file.name,
+            fileSize: file.size,
+            filePath: file.path || this.getCurrentPath(),
+            mimeType: file.mimeType || 'application/octet-stream',
             shareType: shareType,
             permissions: permissions,
             expiry: expiry,
             createdAt: new Date().toISOString(),
-            token: shareToken
+            createdBy: window.authManager?.getCurrentUser()?.email || 'demo-user',
+            accessCount: 0,
+            lastAccessed: null,
+            // Store complete file data for sharing
+            fileData: {
+                id: file.id,
+                name: file.name,
+                size: file.size,
+                type: file.type,
+                mimeType: file.mimeType,
+                path: file.path || this.getCurrentPath(),
+                created: file.created,
+                modified: file.modified,
+                thumbnail: file.thumbnail
+            }
         };
         
-        // Store in localStorage for local access
-        localStorage.setItem(`share_${shareId}`, JSON.stringify(shareInfo));
+        // Store in localStorage with share ID
+        localStorage.setItem(`share_${shareId}`, JSON.stringify(shareData));
         
-        // Return proper share URL
-        return `${baseUrl}/share/${shareId}`;
+        // Also store in file shares index
+        const fileShares = JSON.parse(localStorage.getItem('file_shares') || '{}');
+        fileShares[file.id] = {
+            shareId: shareId,
+            shareUrl: shareUrl,
+            shareType: shareType,
+            permissions: permissions,
+            expiry: expiry,
+            createdAt: new Date().toISOString(),
+            file: file
+        };
+        localStorage.setItem('file_shares', JSON.stringify(fileShares));
+        
+        console.log('Share created:', shareData);
+        return shareUrl;
     }
 
     // Generate unique share token
@@ -1391,11 +1688,16 @@ class FileManager {
         return `${timestamp}_${random}`;
     }
 
-    // Store share information
+    // Store share information with enhanced data
     storeShareInfo(fileId, shareInfo) {
-        const shares = JSON.parse(localStorage.getItem('file_shares') || '{}');
-        shares[fileId] = shareInfo;
-        localStorage.setItem('file_shares', JSON.stringify(shares));
+        const existingShares = JSON.parse(localStorage.getItem('file_shares') || '{}');
+        existingShares[fileId] = {
+            ...shareInfo,
+            createdAt: new Date().toISOString()
+        };
+        localStorage.setItem('file_shares', JSON.stringify(existingShares));
+        
+        console.log('Share info stored for file:', fileId, shareInfo);
     }
 
     // Update share modal UI state
@@ -1459,31 +1761,44 @@ class FileManager {
         }
     }
 
-    // Test share link
+    // Test share link with better validation
     testShareLink() {
+        const shareModal = document.getElementById('shareModal');
         const shareLink = document.getElementById('shareLink');
-        if (shareLink.value) {
-            // Validate the link before testing
-            if (shareLink.value.includes(window.location.href) || 
-                shareLink.value === window.location.href) {
-                Utils.showNotification('잘못된 공유 링크입니다. 다시 생성해주세요.', 'error');
-                return;
+        
+        if (!shareLink.value) {
+            Utils.showNotification('공유 링크가 생성되지 않았습니다.', 'error');
+            return;
+        }
+        
+        // Extract share ID from URL
+        const shareId = shareLink.value.split('#')[1];
+        if (!shareId) {
+            Utils.showNotification('유효하지 않은 공유 링크입니다.', 'error');
+            return;
+        }
+        
+        // Check if share data exists
+        const shareData = localStorage.getItem(`share_${shareId}`);
+        if (!shareData) {
+            Utils.showNotification('공유 데이터를 찾을 수 없습니다.', 'error');
+            return;
+        }
+        
+        // Validate share data
+        try {
+            const parsedData = JSON.parse(shareData);
+            if (!parsedData.fileName || !parsedData.fileData) {
+                throw new Error('공유 데이터가 불완전합니다.');
             }
             
-            try {
-                // Open share link in new tab
-                window.open(shareLink.value, '_blank');
-                Utils.showNotification('공유 링크가 새 탭에서 열렸습니다.');
-                
-                // Log for debugging
-                console.log('Testing share link:', shareLink.value);
-                
-            } catch (error) {
-                console.error('Failed to open share link:', error);
-                Utils.showNotification('공유 링크 테스트에 실패했습니다.', 'error');
-            }
-        } else {
-            Utils.showNotification('먼저 공유 링크를 생성해주세요.', 'error');
+            // Open share link in new tab
+            window.open(shareLink.value, '_blank');
+            Utils.showNotification('공유 링크가 새 탭에서 열렸습니다.', 'success');
+            
+        } catch (error) {
+            console.error('Share validation failed:', error);
+            Utils.showNotification('공유 링크 검증에 실패했습니다.', 'error');
         }
     }
 
@@ -1498,7 +1813,7 @@ class FileManager {
             return;
         }
 
-        const confirmed = confirm('정말로 공유 링크를 취소하시겠습니까?\n취소하면 기존 링크로 더 이상 접근할 수 없습니다.');
+        const confirmed = confirm('정말로 이 파일의 공유를 취소하시겠습니까?\n취소하면 기존 링크로 더 이상 접근할 수 없습니다.');
         if (!confirmed) return;
 
         try {
@@ -1529,7 +1844,7 @@ class FileManager {
             // Update UI state
             this.updateShareModalState(false);
             
-            Utils.showNotification('공유 링크가 취소되었습니다.');
+            Utils.showNotification('공유가 취소되었습니다.');
             
         } catch (error) {
             console.error('Revoke share failed:', error);
