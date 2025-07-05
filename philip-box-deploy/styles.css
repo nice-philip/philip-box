@@ -537,14 +537,9 @@ body.logged-out .auth-modal {
 
 .file-item .file-icon {
     position: relative;
-    width: 48px;
-    height: 48px;
-    margin-right: 16px;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 24px;
-    color: #666;
     flex-shrink: 0;
 }
 
@@ -618,24 +613,35 @@ body.logged-out .auth-modal {
 /* Important star overlay */
 .important-star {
     position: absolute;
-    top: -2px;
-    right: -2px;
-    font-size: 12px;
+    top: 2px;
+    right: 2px;
     color: #ffc107;
-    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+    font-size: 12px;
+    z-index: 2;
+    background: rgba(255, 255, 255, 0.9);
+    border-radius: 50%;
+    width: 18px;
+    height: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
-/* Share indicator styles */
+/* Share indicator */
 .share-indicator {
     position: absolute;
-    top: -2px;
-    left: -2px;
+    top: 2px;
+    left: 2px;
+    color: #4caf50;
     font-size: 12px;
-    color: #2196f3;
-    background: white;
+    z-index: 2;
+    background: rgba(255, 255, 255, 0.9);
     border-radius: 50%;
-    padding: 2px;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+    width: 18px;
+    height: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .share-indicator.fas.fa-globe {
@@ -687,29 +693,35 @@ body.logged-out .auth-modal {
 }
 
 .file-container.grid .file-item {
+    display: flex;
     flex-direction: column;
+    align-items: center;
     text-align: center;
-    padding: 16px;
-    aspect-ratio: 1;
-    justify-content: center;
+    padding: 12px;
+    border-radius: 8px;
+    background: #ffffff;
+    border: 1px solid #e0e0e0;
+    transition: all 0.2s ease;
+    cursor: pointer;
+    position: relative;
 }
 
 .file-container.grid .file-item .file-icon {
-    margin-right: 0;
-    margin-bottom: 12px;
-    font-size: 32px;
     width: 64px;
     height: 64px;
+    margin-bottom: 8px;
+    font-size: 32px;
+    color: #666;
 }
 
-.file-container.grid .file-item .file-info {
-    text-align: center;
+.file-container.grid .file-thumbnail {
+    width: 64px;
+    height: 64px;
+    border-radius: 6px;
 }
 
-.file-container.grid .file-item .file-meta {
-    justify-content: center;
-    flex-direction: column;
-    gap: 4px;
+.file-container.grid .file-thumbnail img {
+    border-radius: 6px;
 }
 
 .file-container.grid .file-item .file-actions {
@@ -736,17 +748,22 @@ body.logged-out .auth-modal {
 }
 
 .file-container.list .file-item {
+    display: flex;
     flex-direction: row;
     align-items: center;
     padding: 12px 16px;
-    min-height: 60px;
+    border-bottom: 1px solid #f0f0f0;
+    background: #ffffff;
+    transition: background-color 0.2s ease;
+    cursor: pointer;
 }
 
 .file-container.list .file-item .file-icon {
-    margin-right: 16px;
     width: 40px;
     height: 40px;
+    margin-right: 16px;
     font-size: 20px;
+    color: #666;
 }
 
 .file-container.list .file-item .file-info {
@@ -767,6 +784,16 @@ body.logged-out .auth-modal {
 
 .file-container.list .file-item .share-details {
     margin-top: 4px;
+}
+
+.file-container.list .file-item .file-thumbnail {
+    width: 40px;
+    height: 40px;
+    border-radius: 4px;
+}
+
+.file-container.list .file-item .file-thumbnail img {
+    border-radius: 4px;
 }
 
 /* Empty state styles */
@@ -1440,8 +1467,16 @@ body.logged-out .auth-modal {
     transition: opacity 0.3s ease;
 }
 
+.file-thumbnail img[style*="opacity:1"] {
+    opacity: 1 !important;
+}
+
 .file-thumbnail.video-thumbnail {
     background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%);
+}
+
+.file-thumbnail.image-thumbnail {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
 }
 
 .video-thumbnail-placeholder {
@@ -1562,8 +1597,8 @@ body.logged-out .auth-modal {
 
 /* Thumbnail hover effects */
 .file-item:hover .file-thumbnail {
-    transform: scale(1.05);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    transform: scale(1.02);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
 .file-thumbnail:hover {
@@ -1597,15 +1632,19 @@ body.logged-out .auth-modal {
     }
 }
 
-/* File type specific thumbnail styles */
-.file-thumbnail.image-thumbnail {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+/* Debug styles for thumbnail issues */
+.file-thumbnail[data-debug="true"] {
+    border: 2px dashed #ff0000;
 }
 
-.file-thumbnail.video-thumbnail {
-    background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%);
-}
-
-.file-thumbnail.document-thumbnail {
-    background: linear-gradient(135deg, #2196f3 0%, #1976d2 100%);
+.file-thumbnail[data-debug="true"]::before {
+    content: "THUMB";
+    position: absolute;
+    top: 0;
+    left: 0;
+    background: red;
+    color: white;
+    font-size: 8px;
+    padding: 1px 2px;
+    z-index: 10;
 } 

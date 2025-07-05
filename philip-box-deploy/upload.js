@@ -44,45 +44,23 @@ class UploadManager {
         }
     }
 
-    // Reset file input - 더 확실한 초기화 방법
+    // Reset file input completely
     resetFileInput() {
         console.log('Resetting file input...');
         
         const fileInput = document.getElementById('fileInput');
         if (fileInput) {
-            try {
-                // Method 1: Clear value
-                fileInput.value = '';
-                
-                // Method 2: Clear files if supported
-                if (fileInput.files) {
-                    fileInput.files = null;
-                }
-                
-                // Method 3: Reset form if exists
-                const form = fileInput.closest('form');
-                if (form) {
-                    form.reset();
-                }
-                
-                // Method 4: Clone and replace element (most effective)
-                const newFileInput = fileInput.cloneNode(true);
-                newFileInput.value = '';
-                
-                // Remove old event listeners by cloning
-                fileInput.parentNode.replaceChild(newFileInput, fileInput);
-                
-                // Re-attach event listeners to new input
-                this.setupFileInput();
-                
-                console.log('File input reset complete');
-                
-            } catch (error) {
-                console.error('Error resetting file input:', error);
-                
-                // Fallback: just clear value
-                fileInput.value = '';
-            }
+            // Clear the value
+            fileInput.value = '';
+            
+            // Create a new file input to completely reset it
+            const newFileInput = fileInput.cloneNode(true);
+            fileInput.parentNode.replaceChild(newFileInput, fileInput);
+            
+            // Re-setup event listeners for the new input
+            this.setupFileInput();
+            
+            console.log('File input reset complete');
         }
     }
 
@@ -440,13 +418,25 @@ class UploadManager {
                 // Generate thumbnail if supported
                 if (Utils.isThumbnailSupported(file.name)) {
                     try {
-                        const thumbnailData = await window.fileManager.generateRealThumbnail(fileData, file);
-                        if (thumbnailData) {
-                            fileData.thumbnail = thumbnailData;
+                        console.log('Attempting to generate thumbnail for:', file.name, 'File type:', file.type, 'File size:', file.size);
+                        
+                        if (window.fileManager && typeof window.fileManager.generateRealThumbnail === 'function') {
+                            const thumbnailData = await window.fileManager.generateRealThumbnail(fileData, file);
+                            if (thumbnailData) {
+                                fileData.thumbnail = thumbnailData;
+                                console.log('✓ Thumbnail generated and stored for:', file.name);
+                            } else {
+                                console.log('⚠ No thumbnail data returned for:', file.name);
+                            }
+                        } else {
+                            console.warn('FileManager or generateRealThumbnail method not available');
                         }
                     } catch (thumbnailError) {
-                        console.warn('Failed to generate thumbnail:', thumbnailError);
+                        console.error('Failed to generate thumbnail for', file.name, ':', thumbnailError);
+                        // Continue without thumbnail - not a critical error
                     }
+                } else {
+                    console.log('Thumbnail not supported for file type:', file.name);
                 }
                 
                 // Store file in local storage

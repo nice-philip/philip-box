@@ -9,17 +9,20 @@ class AuthManager {
 
     // Initialize authentication
     async initializeAuth() {
+        console.log('=== Starting Auth Initialization ===');
+        
         const token = localStorage.getItem(CONFIG.STORAGE_KEYS.TOKEN);
         const user = localStorage.getItem(CONFIG.STORAGE_KEYS.USER);
 
-        console.log('Initializing auth - Token exists:', !!token, 'User exists:', !!user);
+        console.log('Auth check - Token exists:', !!token, 'User exists:', !!user);
 
         if (token && user) {
             try {
+                // Parse user data
                 this.currentUser = JSON.parse(user);
                 this.isLoggedIn = true;
                 
-                console.log('Setting logged in state for user:', this.currentUser.email);
+                console.log('✓ Auth data found, setting logged in state for:', this.currentUser.email);
                 
                 // Update UI immediately
                 this.updateUI();
@@ -27,10 +30,18 @@ class AuthManager {
                 // Hide login modal immediately
                 this.hideLoginModal();
                 
-                // Load user data and initialize app
+                // Show main content immediately
+                this.showMainContent();
+                
+                // Enable interface immediately
+                this.enableInterface();
+                
+                console.log('✓ UI updated, loading user data...');
+                
+                // Load user data in background
                 await this.loadUserData();
                 
-                // Validate token in background (don't await to avoid blocking UI)
+                // Validate token silently (non-blocking)
                 this.validateTokenSilently();
                 
                 this.initializationComplete = true;
@@ -52,19 +63,38 @@ class AuthManager {
     // Load user data and initialize app components
     async loadUserData() {
         try {
+            console.log('Loading user data...');
+            
             // Initialize file manager
             if (window.fileManager) {
-                console.log('Loading files for authenticated user...');
-                await window.fileManager.loadFiles();
+                console.log('✓ File manager available, loading files...');
+                
+                // Load from URL if available, otherwise load root
+                const urlParams = new URLSearchParams(window.location.search);
+                const pathParam = urlParams.get('path');
+                const sectionParam = urlParams.get('section');
+                
+                if (pathParam || sectionParam) {
+                    console.log('Found URL parameters, loading from URL');
+                    // Let fileManager handle URL-based navigation
+                    window.fileManager.loadFolderFromUrl();
+                } else {
+                    // Load default files
+                    await window.fileManager.loadFiles();
+                }
+                
                 await window.fileManager.loadStorageInfo();
+                console.log('✓ Files loaded successfully');
             }
             
-            // Initialize other components as needed
-            console.log('User data loaded successfully');
+            console.log('✓ User data loaded successfully');
             
         } catch (error) {
-            console.error('Failed to load user data:', error);
-            // Don't logout immediately, maybe just a network issue
+            console.error('❌ Failed to load user data:', error);
+            // Don't logout immediately for network errors
+            if (error.status === 401 || error.status === 403) {
+                this.handleAuthError();
+            }
         }
     }
 
@@ -78,7 +108,7 @@ class AuthManager {
                 this.currentUser = response.user;
                 localStorage.setItem(CONFIG.STORAGE_KEYS.USER, JSON.stringify(this.currentUser));
                 this.updateUI();
-                console.log('Token validation successful');
+                console.log('✓ Token validation successful');
             }
             
         } catch (error) {
@@ -243,7 +273,8 @@ class AuthManager {
 
     // Update UI based on authentication state
     updateUI() {
-        console.log('Updating UI - isLoggedIn:', this.isLoggedIn, 'currentUser:', this.currentUser);
+        console.log('=== Updating UI ===');
+        console.log('Auth state - isLoggedIn:', this.isLoggedIn, 'currentUser:', this.currentUser?.email);
         
         const loginModal = document.getElementById('loginModal');
         const registerModal = document.getElementById('registerModal');
@@ -254,7 +285,7 @@ class AuthManager {
         
         if (this.isLoggedIn && this.currentUser) {
             // User is logged in - show main interface
-            console.log('Showing authenticated UI for:', this.currentUser.email);
+            console.log('✓ Showing authenticated UI for:', this.currentUser.email);
             
             // Hide auth modals
             if (loginModal) {
@@ -283,24 +314,67 @@ class AuthManager {
             // Enable all interactive elements
             this.enableInterface();
             
+            // Update body class
+            document.body.classList.add('logged-in');
+            document.body.classList.remove('logged-out');
+            
         } else {
             // User is not logged in - show login interface
-            console.log('Showing login UI');
+            console.log('✓ Showing login UI');
             
             // Hide main content
-            if (mainContent) {
-                mainContent.style.display = 'none';
-                mainContent.style.visibility = 'hidden';
-            }
+            this.hideMainContent();
             
             // Show login modal if not already visible
-            if (loginModal && loginModal.style.display !== 'block') {
+            if (loginModal && loginModal.style.display !== 'flex') {
                 this.showLoginModal();
             }
             
             // Disable interface
             this.disableInterface();
+            
+            // Update body class
+            document.body.classList.add('logged-out');
+            document.body.classList.remove('logged-in');
         }
+    }
+
+    // Show main content
+    showMainContent() {
+        const mainContent = document.querySelector('.main-content');
+        const body = document.body;
+        
+        if (mainContent) {
+            mainContent.style.display = 'flex';
+            mainContent.style.visibility = 'visible';
+            mainContent.style.opacity = '1';
+        }
+        
+        if (body) {
+            body.classList.add('logged-in');
+            body.classList.remove('logged-out');
+        }
+        
+        console.log('✓ Main content shown');
+    }
+
+    // Hide main content
+    hideMainContent() {
+        const mainContent = document.querySelector('.main-content');
+        const body = document.body;
+        
+        if (mainContent) {
+            mainContent.style.display = 'none';
+            mainContent.style.visibility = 'hidden';
+            mainContent.style.opacity = '0';
+        }
+        
+        if (body) {
+            body.classList.add('logged-out');
+            body.classList.remove('logged-in');
+        }
+        
+        console.log('✓ Main content hidden');
     }
 
     // Enable interface elements
@@ -371,15 +445,26 @@ class AuthManager {
         }
     }
 
-    // Load initial data after login
+    // Load initial data after login/register
     async loadInitialData() {
         try {
             // Only load if fileManager is available
             if (window.fileManager) {
-                await Promise.all([
-                    window.fileManager.loadFiles(),
-                    window.fileManager.loadStorageInfo()
-                ]);
+                // Check if we have URL parameters to load a specific folder
+                const urlParams = new URLSearchParams(window.location.search);
+                const pathParam = urlParams.get('path');
+                const sectionParam = urlParams.get('section');
+                
+                if (pathParam || sectionParam) {
+                    console.log('Loading initial data from URL parameters');
+                    // Let fileManager handle URL-based navigation
+                    window.fileManager.loadFolderFromUrl();
+                } else {
+                    // Load default data
+                    await window.fileManager.loadFiles();
+                }
+                
+                await window.fileManager.loadStorageInfo();
             }
         } catch (error) {
             console.error('Failed to load initial data:', error);
@@ -407,10 +492,7 @@ class AuthManager {
         localStorage.removeItem(CONFIG.STORAGE_KEYS.USER);
         
         // Update UI
-        this.updateUI(true);
-        this.showLoginModal();
-        this.disableInterface();
-        this.hideMainContent();
+        this.updateUI();
         
         // Dispatch auth initialized event
         this.dispatchAuthEvent('auth-initialized', { authenticated: false });

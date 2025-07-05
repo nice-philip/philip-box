@@ -28,6 +28,14 @@ class PreviewManager {
             });
         }
 
+        // Download button in preview modal
+        const previewDownloadBtn = document.getElementById('previewDownloadBtn');
+        if (previewDownloadBtn) {
+            previewDownloadBtn.addEventListener('click', () => {
+                this.downloadCurrentFile();
+            });
+        }
+
         // Close modal when clicking outside
         if (this.previewModal) {
             this.previewModal.addEventListener('click', (e) => {
@@ -53,6 +61,11 @@ class PreviewManager {
                     case ' ':
                         e.preventDefault();
                         this.togglePlayback();
+                        break;
+                    case 'd':
+                    case 'D':
+                        e.preventDefault();
+                        this.downloadCurrentFile();
                         break;
                 }
             }
@@ -298,7 +311,7 @@ class PreviewManager {
         downloadBtn.className = 'btn btn-primary';
         downloadBtn.innerHTML = '<i class="fas fa-download"></i> 다운로드';
         downloadBtn.addEventListener('click', () => {
-            window.fileManager.downloadFile(file);
+            this.downloadCurrentFile();
         });
         
         unsupportedContainer.appendChild(icon);
@@ -594,9 +607,144 @@ class PreviewManager {
 
     // Download current file
     downloadCurrentFile() {
-        if (this.currentFile && window.fileManager) {
-            window.fileManager.downloadFile(this.currentFile);
+        if (!this.currentFile) {
+            Utils.showNotification('다운로드할 파일이 없습니다.', 'error');
+            return;
         }
+
+        if (window.fileManager) {
+            // Use fileManager's download method which handles all file types
+            window.fileManager.downloadFile(this.currentFile);
+        } else {
+            // Fallback: create direct download for shared files
+            this.downloadSharedFile(this.currentFile);
+        }
+    }
+
+    // Download shared file directly (fallback method)
+    downloadSharedFile(file) {
+        try {
+            console.log('Downloading shared file:', file.name);
+            
+            // Create download content based on file type
+            const content = this.createDemoFileContent(file);
+            const extension = file.name.split('.').pop()?.toLowerCase() || 'txt';
+            const mimeType = this.getMimeType(extension);
+            
+            // Create blob and download
+            const blob = new Blob([content], { type: mimeType });
+            const url = URL.createObjectURL(blob);
+            
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = file.name;
+            link.style.display = 'none';
+            
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            
+            URL.revokeObjectURL(url);
+            
+            Utils.showNotification(`${file.name} 다운로드 완료`, 'success');
+            
+        } catch (error) {
+            console.error('Shared file download failed:', error);
+            Utils.showNotification('다운로드에 실패했습니다.', 'error');
+        }
+    }
+
+    // Create demo file content (similar to fileManager)
+    createDemoFileContent(file) {
+        const fileExtension = file.name.split('.').pop()?.toLowerCase() || 'txt';
+        
+        switch (fileExtension) {
+            case 'txt':
+                return `This is a shared demo file: ${file.name}
+
+Created: ${file.created || new Date().toISOString()}
+Size: ${this.formatFileSize(file.size || 1024)}
+Shared via: Philip Box
+
+This is demonstration content for the Philip Box dropbox clone.
+In a real application, this would be the actual file content.
+
+Thank you for testing Philip Box!`;
+
+            case 'html':
+                return `<!DOCTYPE html>
+<html>
+<head>
+    <title>${file.name}</title>
+</head>
+<body>
+    <h1>Shared Demo File: ${file.name}</h1>
+    <p>This is a shared demonstration HTML file.</p>
+    <p>Created: ${file.created || new Date().toISOString()}</p>
+    <p>Size: ${this.formatFileSize(file.size || 1024)}</p>
+    <p>Shared via Philip Box</p>
+</body>
+</html>`;
+
+            case 'json':
+                return JSON.stringify({
+                    fileName: file.name,
+                    created: file.created || new Date().toISOString(),
+                    size: file.size || 1024,
+                    type: file.type || 'file',
+                    shared: true,
+                    sharedVia: 'Philip Box',
+                    message: 'This is a shared demo JSON file for Philip Box'
+                }, null, 2);
+
+            default:
+                return `Shared demo file: ${file.name}
+
+This is a shared demonstration file for Philip Box.
+File type: ${fileExtension}
+Created: ${file.created || new Date().toISOString()}
+Size: ${this.formatFileSize(file.size || 1024)}
+
+In a real application, this would contain the actual file content.
+
+Philip Box - Your files, anywhere, anytime.`;
+        }
+    }
+
+    // Get MIME type for file extension
+    getMimeType(extension) {
+        const mimeTypes = {
+            'txt': 'text/plain',
+            'html': 'text/html',
+            'css': 'text/css',
+            'js': 'application/javascript',
+            'json': 'application/json',
+            'xml': 'application/xml',
+            'csv': 'text/csv',
+            'md': 'text/markdown',
+            'pdf': 'application/pdf',
+            'jpg': 'image/jpeg',
+            'jpeg': 'image/jpeg',
+            'png': 'image/png',
+            'gif': 'image/gif',
+            'mp4': 'video/mp4',
+            'mp3': 'audio/mpeg',
+            'zip': 'application/zip'
+        };
+        
+        return mimeTypes[extension] || 'application/octet-stream';
+    }
+
+    // Format file size (fallback if Utils not available)
+    formatFileSize(bytes) {
+        if (typeof Utils !== 'undefined' && Utils.formatFileSize) {
+            return Utils.formatFileSize(bytes);
+        }
+        
+        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+        if (bytes === 0) return '0 Bytes';
+        const i = Math.floor(Math.log(bytes) / Math.log(1024));
+        return Math.round(bytes / Math.pow(1024, i) * 100) / 100 + ' ' + sizes[i];
     }
 }
 
