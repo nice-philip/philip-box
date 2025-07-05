@@ -146,17 +146,25 @@ class AuthManager {
         try {
             console.log('📂 Loading user data and files...');
             
-            // Ensure file manager is available
-            if (window.fileManager) {
+            // Wait for file manager to be available with multiple retries
+            const fileManager = await this.waitForFileManager();
+            
+            if (fileManager) {
                 console.log('✅ File manager available, loading files...');
                 
                 // Load files first
-                await window.fileManager.loadFiles();
+                await fileManager.loadFiles();
                 console.log('✅ Files loaded');
                 
                 // Load storage info
-                await window.fileManager.loadStorageInfo();
+                await fileManager.loadStorageInfo();
                 console.log('✅ Storage info loaded');
+                
+                // Force UI refresh to show loaded files
+                if (typeof fileManager.renderFiles === 'function') {
+                    fileManager.renderFiles();
+                    console.log('✅ Files rendered');
+                }
                 
                 // Check for URL parameters
                 const urlParams = new URLSearchParams(window.location.search);
@@ -165,23 +173,68 @@ class AuthManager {
                 
                 if (pathParam || sectionParam) {
                     console.log('🔗 Loading from URL parameters');
-                    window.fileManager.loadFolderFromUrl();
+                    fileManager.loadFolderFromUrl();
                 }
                 
-            } else {
-                console.warn('⚠️ File manager not available yet, will retry...');
+                console.log('✅ All user data and files loaded successfully');
                 
-                // Retry after delay
-                setTimeout(() => {
-                    this.loadUserDataAndFiles();
-                }, 1000);
+            } else {
+                console.error('❌ File manager not available after multiple retries');
+                // Try to initialize file manager manually
+                this.tryInitializeFileManager();
             }
             
         } catch (error) {
             console.error('❌ Failed to load user data:', error);
             
-            // Don't logout for data loading errors
-            console.log('📝 Data loading failed but keeping user logged in');
+            // Don't logout for data loading errors, but try to recover
+            console.log('📝 Data loading failed but keeping user logged in, attempting recovery...');
+            
+            // Try to recover after a delay
+            setTimeout(() => {
+                this.loadUserDataAndFiles();
+            }, 2000);
+        }
+    }
+
+    // Wait for file manager to be available with multiple retries
+    async waitForFileManager(maxRetries = 50, retryDelay = 200) {
+        console.log('⏳ Waiting for file manager to be available...');
+        
+        for (let i = 0; i < maxRetries; i++) {
+            if (window.fileManager) {
+                console.log(`✅ File manager found after ${i + 1} attempts`);
+                return window.fileManager;
+            }
+            
+            console.log(`⏳ Attempt ${i + 1}/${maxRetries} - File manager not ready yet`);
+            await new Promise(resolve => setTimeout(resolve, retryDelay));
+        }
+        
+        console.warn(`⚠️ File manager not available after ${maxRetries} attempts`);
+        return null;
+    }
+
+    // Try to manually initialize file manager
+    async tryInitializeFileManager() {
+        console.log('🔧 Attempting to manually initialize file manager...');
+        
+        try {
+            // Check if FileManager class is available
+            if (typeof FileManager !== 'undefined') {
+                console.log('✅ FileManager class found, creating instance...');
+                window.fileManager = new FileManager();
+                
+                // Give it a moment to initialize
+                await new Promise(resolve => setTimeout(resolve, 500));
+                
+                // Try loading files again
+                await this.loadUserDataAndFiles();
+            } else {
+                console.error('❌ FileManager class not available');
+            }
+        } catch (error) {
+            console.error('❌ Failed to manually initialize file manager:', error);
         }
     }
 
