@@ -1606,26 +1606,36 @@ class FileManager {
 
     // Handle file double click with enhanced navigation
     handleFileDoubleClick(file) {
-        console.log('🖱️ File double clicked:', file.name, 'type:', file.type);
+        console.log('🔍 ===== 파일 더블클릭 디버깅 시작 =====');
+        console.log('🖱️ 더블클릭된 파일:', file.name);
+        console.log('📋 파일 타입:', file.type);
+        console.log('📁 현재 currentPath:', this.currentPath);
         
         if (file.type === 'folder') {
-            console.log('📁 Opening folder:', file.name);
+            console.log('📁 폴더 더블클릭 - 폴더 이동 시작');
             
             // Construct folder path
             const folderPath = this.currentPath === '/' ? 
                 '/' + file.name : 
                 this.currentPath + '/' + file.name;
             
-            console.log('🚀 Navigating to folder path:', folderPath);
+            console.log('🔧 폴더 경로 생성:');
+            console.log('  현재 경로:', this.currentPath);
+            console.log('  폴더명:', file.name);
+            console.log('  생성된 경로:', folderPath);
+            
+            console.log('🚀 navigateToFolder 호출 중...');
             
             // Navigate to folder with URL update
             this.navigateToFolder(folderPath, true);
         } else {
-            console.log('📄 Opening file preview for:', file.name);
+            console.log('📄 파일 더블클릭 - 미리보기 열기:', file.name);
             
             // Open file preview
             this.openFilePreview(file);
         }
+        
+        console.log('🔍 ===== 파일 더블클릭 디버깅 끝 =====');
     }
 
     // Open file
@@ -1671,7 +1681,10 @@ class FileManager {
     // Navigate to folder with enhanced URL updating
     async navigateToFolder(path, updateUrl = true) {
         try {
-            console.log('🚀 Navigating to folder:', path, 'updateUrl:', updateUrl);
+            console.log('🔍 ===== 폴더 이동 디버깅 시작 =====');
+            console.log('🚀 요청된 이동 경로:', path);
+            console.log('🔗 URL 업데이트 여부:', updateUrl);
+            console.log('📁 현재 currentPath (이동 전):', this.currentPath);
             
             // Validate path
             if (!path || typeof path !== 'string') {
@@ -1681,27 +1694,42 @@ class FileManager {
             
             // Normalize path
             const normalizedPath = path.startsWith('/') ? path : '/' + path;
+            console.log('📐 정규화된 경로:', normalizedPath);
             
             // Update current path
+            console.log('🔄 currentPath 업데이트 중...');
+            console.log('  이전 값:', this.currentPath);
             this.currentPath = normalizedPath;
-            console.log('✅ Current path updated to:', this.currentPath);
+            console.log('  새로운 값:', this.currentPath);
+            console.log('✅ currentPath 업데이트 완료');
+            
+            // getCurrentPath 함수 테스트
+            if (this.getCurrentPath) {
+                const testGetCurrentPath = this.getCurrentPath();
+                console.log('🧪 getCurrentPath() 테스트 결과:', testGetCurrentPath);
+            }
             
             // Update URL if requested
             if (updateUrl) {
-                console.log('🔗 Updating URL for navigation...');
+                console.log('🔗 URL 업데이트 중...');
                 this.updateUrl();
             }
             
             // Update breadcrumb
+            console.log('🍞 Breadcrumb 업데이트 중...');
             this.updateBreadcrumb();
             
             // Load files for the new path
+            console.log('📂 새 경로의 파일 로딩 중:', normalizedPath);
             await this.loadFiles(normalizedPath);
             
             // Update UI
+            console.log('🖼️ UI 렌더링 중...');
             this.renderFiles();
             
-            console.log('✅ Navigation to folder completed:', normalizedPath);
+            console.log('✅ 폴더 이동 완료:', normalizedPath);
+            console.log('📁 최종 currentPath:', this.currentPath);
+            console.log('🔍 ===== 폴더 이동 디버깅 끝 =====');
             
         } catch (error) {
             console.error('❌ Navigation failed:', error);
@@ -2978,22 +3006,34 @@ ${file.name},"${Utils.formatFileSize(file.size || 1024)}","${file.created || new
 
     // Get current path
     getCurrentPath() {
+        console.log('🔍 ===== getCurrentPath 호출 디버깅 =====');
+        console.log('📁 원본 this.currentPath:', this.currentPath);
+        console.log('📋 typeof currentPath:', typeof this.currentPath);
+        
         // Ensure we always return a valid path
         let path = this.currentPath || '/';
+        console.log('📐 기본값 처리 후:', path);
         
         // Validate and normalize path
         if (typeof path !== 'string') {
+            console.log('⚠️ 문자열이 아님, 루트로 변경');
             path = '/';
         }
         
         if (!path.startsWith('/')) {
+            console.log('🔧 / 시작 문자 추가');
             path = '/' + path;
         }
         
         // Remove double slashes
+        const beforeRemoveDouble = path;
         path = path.replace(/\/+/g, '/');
+        if (beforeRemoveDouble !== path) {
+            console.log('🔧 중복 슬래시 제거:', beforeRemoveDouble, '->', path);
+        }
         
-        console.log('getCurrentPath returning:', path);
+        console.log('✅ 최종 반환 경로:', path);
+        console.log('🔍 ===== getCurrentPath 디버깅 끝 =====');
         return path;
     }
 

@@ -312,47 +312,47 @@ class UploadManager {
     async uploadFileSimple(task) {
         const { file } = task;
         
-        // 🔥 Firebase 스타일: 간단하고 명확한 경로 결정
-        let currentPath = '/';
+        console.log('🔥 FIREBASE STYLE - 파일 업로드 시작');
+        console.log('📄 파일명:', file.name);
         
-        // 1순위: fileManager의 현재 경로 (가장 정확한 경로)
-        if (window.fileManager && window.fileManager.getCurrentPath) {
-            currentPath = window.fileManager.getCurrentPath();
-            console.log('  ✅ Using fileManager getCurrentPath:', currentPath);
+        // 🔥 Firebase 스타일: 간단하고 명확한 경로 결정
+        // Firebase 예제: const fullPath = folder + '/' + file.name;
+        
+        let currentFolder = '/';
+        
+        // 📁 현재 폴더 경로 가져오기 (가장 직접적인 방법 우선)
+        if (window.fileManager && window.fileManager.currentPath) {
+            currentFolder = window.fileManager.currentPath;
+            console.log('✅ fileManager.currentPath 사용:', currentFolder);
         }
-        // 2순위: fileManager의 currentPath 속성
-        else if (window.fileManager && window.fileManager.currentPath) {
-            currentPath = window.fileManager.currentPath;
-            console.log('  ✅ Using fileManager.currentPath:', currentPath);
-        }
-        // 3순위: URL에서 경로 파라미터 추출
+        // URL 파라미터에서 폴더 경로 확인 (브라우저 상태와 동기화)
         else {
             const urlParams = new URLSearchParams(window.location.search);
             const pathParam = urlParams.get('path');
             if (pathParam) {
-                currentPath = decodeURIComponent(pathParam);
-                console.log('  ✅ Using URL path parameter:', currentPath);
+                currentFolder = decodeURIComponent(pathParam);
+                console.log('✅ URL path 파라미터 사용:', currentFolder);
             } else {
-                console.log('  ⚠️ Using default root path:', currentPath);
+                console.log('✅ 기본 루트 폴더 사용:', currentFolder);
             }
         }
         
-        // 🔥 Firebase 스타일: 폴더경로 + 파일명 = 완전한 경로
-        const fullFilePath = currentPath === '/' ? 
-            `/${file.name}` : 
-            `${currentPath}/${file.name}`;
+        // 🔥 Firebase 스타일: 폴더 + 파일명 = 완전한 경로
+        const fullPath = currentFolder === '/' ? 
+            file.name : 
+            currentFolder + '/' + file.name;
         
-        console.log('🔥 FIREBASE STYLE - Full file path:', fullFilePath);
-        console.log('  📁 Current folder:', currentPath);
-        console.log('  📄 File name:', file.name);
-        console.log('  🎯 Target path for upload:', fullFilePath);
+        console.log('🔥 FIREBASE STYLE - 업로드 정보:');
+        console.log('  📁 대상 폴더:', currentFolder);
+        console.log('  📄 파일명:', file.name);
+        console.log('  🎯 전체 경로:', fullPath);
         
         // Try API first, then fallback to local storage
         try {
             const formData = new FormData();
             formData.append('file', file);
-            formData.append('path', currentPath);
-            formData.append('fullPath', fullFilePath);
+            formData.append('path', currentFolder);
+            formData.append('fullPath', fullPath);
             
             // Create XMLHttpRequest for progress tracking
             const response = await new Promise((resolve, reject) => {
@@ -394,28 +394,28 @@ class UploadManager {
                 xhr.send(formData);
             });
             
-            console.log('✅ Upload successful via API for', file.name);
+            console.log('✅ API 업로드 성공:', file.name);
             
-            // 🔥 업로드 성공 후 파일매니저 새로고침 (특정 경로에 대해)
-            this.refreshFileManagerAfterUpload(currentPath);
+            // 🔥 업로드 성공 후 파일매니저 새로고침
+            this.refreshFileManagerAfterUpload(currentFolder);
             
             return response;
             
         } catch (error) {
-            console.warn('API upload failed, using local storage:', error);
+            console.warn('⚠️ API 업로드 실패, 로컬 저장소 사용:', error);
             
             // Fallback to local storage
-            const result = await this.uploadFileLocal(file, currentPath, task);
+            const result = await this.uploadFileLocal(file, currentFolder, task);
             
-            // 🔥 로컬 업로드 성공 후에도 파일매니저 새로고침 (특정 경로에 대해)
-            this.refreshFileManagerAfterUpload(currentPath);
+            // 🔥 로컬 업로드 성공 후에도 파일매니저 새로고침
+            this.refreshFileManagerAfterUpload(currentFolder);
             
             return result;
         }
     }
 
     // Upload file to local storage (fallback)
-    async uploadFileLocal(file, currentPath, task) {
+    async uploadFileLocal(file, targetFolder, task) {
         return new Promise(async (resolve, reject) => {
             try {
                 // Simulate upload progress
@@ -428,33 +428,30 @@ class UploadManager {
                     await new Promise(resolve => setTimeout(resolve, 100));
                 }
                 
-                // 🔥 Firebase 스타일: 명확한 경로 확정
-                const uploadPath = this.normalizePath(currentPath || '/');
-                console.log('🔥 FIREBASE STYLE LOCAL - Upload path:', uploadPath);
-                console.log('  📁 Target folder:', uploadPath);
-                console.log('  📄 File name:', file.name);
+                console.log('🔥 FIREBASE STYLE - 로컬 저장소 업로드');
+                console.log('  📁 대상 폴더:', targetFolder);
+                console.log('  📄 파일명:', file.name);
                 
-                // Create file data with EXACT path like Firebase
+                // Create file data with Firebase-style path
                 const fileData = {
                     id: Utils.generateId(),
                     name: file.name,
                     size: file.size,
                     type: file.type === 'application/x-msdos-program' ? 'file' : (file.type.startsWith('image/') ? 'image' : file.type.startsWith('video/') ? 'video' : 'file'),
                     mimeType: file.type || 'application/octet-stream',
-                    path: uploadPath,  // 🔥 정확한 폴더 경로
+                    path: targetFolder,  // 🔥 Firebase 스타일: 정확한 폴더 경로
                     created: new Date().toISOString(),
                     modified: new Date().toISOString(),
                     isLocal: true,
                     uploadedBy: window.authManager?.getCurrentUser()?.email || 'demo-user'
                 };
                 
-                console.log('🔥 FIREBASE STYLE - File will be stored in:', {
-                    fileName: fileData.name,
-                    folderPath: fileData.path,
-                    fullPath: uploadPath === '/' ? `/${file.name}` : `${uploadPath}/${file.name}`
-                });
+                console.log('💾 파일 데이터 생성:');
+                console.log('  📄 이름:', fileData.name);
+                console.log('  📁 경로:', fileData.path);
+                console.log('  📊 크기:', fileData.size);
                 
-                // 🔥 Firebase 스타일: 이미지 썸네일 생성 개선
+                // 🔥 Firebase 스타일: 이미지 썸네일 생성
                 await this.generateFirebaseStyleThumbnail(fileData, file);
                 
                 // 🔥 Firebase 스타일: 저장소에 파일 저장
@@ -462,22 +459,23 @@ class UploadManager {
                 storedFiles.push(fileData);
                 localStorage.setItem('stored_files', JSON.stringify(storedFiles));
                 
-                console.log('✅ FIREBASE STYLE SUCCESS - File stored:');
-                console.log('  📄 Name:', fileData.name);
-                console.log('  📁 Path:', fileData.path);
-                console.log('  📊 Total files:', storedFiles.length);
+                console.log('✅ FIREBASE STYLE 로컬 저장 성공:');
+                console.log('  📄 파일:', fileData.name);
+                console.log('  📁 폴더:', fileData.path);
+                console.log('  📊 총 파일 수:', storedFiles.length);
                 
                 // Success notification
-                Utils.showNotification(`📁 ${file.name}이(가) ${uploadPath} 폴더에 업로드되었습니다.`, 'success');
+                const folderDisplay = targetFolder === '/' ? '루트' : targetFolder;
+                Utils.showNotification(`📁 ${file.name}이(가) ${folderDisplay} 폴더에 업로드되었습니다.`, 'success');
                 
                 resolve({
                     success: true,
                     file: fileData,
-                    message: `File uploaded to ${uploadPath} successfully (local storage)`
+                    message: `File uploaded to ${targetFolder} successfully (local storage)`
                 });
                 
             } catch (error) {
-                console.error('❌ Local upload failed:', error);
+                console.error('❌ 로컬 업로드 실패:', error);
                 reject(error);
             }
         });
@@ -531,58 +529,6 @@ class UploadManager {
             console.error('❌ Firebase 스타일 썸네일 생성 실패:', error);
             // Firebase 스타일: 썸네일 생성 실패해도 원본 파일 업로드는 계속
         }
-    }
-
-    // Determine upload path with multiple fallbacks
-    determineUploadPath(providedPath) {
-        console.log('🔥 FIREBASE STYLE - Determining upload path...');
-        console.log('  📥 Provided path:', providedPath);
-        
-        let finalPath = '/';
-        
-        // 1순위: 명시적으로 제공된 경로 사용
-        if (providedPath && typeof providedPath === 'string' && providedPath.trim() !== '') {
-            finalPath = providedPath;
-            console.log('  ✅ Using provided path:', finalPath);
-        }
-        // 2순위: fileManager의 현재 경로
-        else if (window.fileManager && window.fileManager.getCurrentPath) {
-            finalPath = window.fileManager.getCurrentPath();
-            console.log('  ✅ Using fileManager path:', finalPath);
-        }
-        // 3순위: fileManager의 currentPath 속성
-        else if (window.fileManager && window.fileManager.currentPath) {
-            finalPath = window.fileManager.currentPath;
-            console.log('  ✅ Using fileManager.currentPath:', finalPath);
-        }
-        
-        // 경로 정규화 (Firebase 스타일)
-        finalPath = this.normalizePath(finalPath);
-        
-        console.log('  🎯 FIREBASE STYLE - Final path:', finalPath);
-        return finalPath;
-    }
-
-    // Normalize path to ensure consistency
-    normalizePath(path) {
-        if (!path || typeof path !== 'string') {
-            return '/';
-        }
-        
-        // Ensure starts with /
-        if (!path.startsWith('/')) {
-            path = '/' + path;
-        }
-        
-        // Remove double slashes
-        path = path.replace(/\/+/g, '/');
-        
-        // Remove trailing slash (except for root)
-        if (path.length > 1 && path.endsWith('/')) {
-            path = path.slice(0, -1);
-        }
-        
-        return path;
     }
 
     // Update upload progress
