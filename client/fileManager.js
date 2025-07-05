@@ -1631,8 +1631,8 @@ class FileManager {
         } else {
             console.log('📄 파일 더블클릭 - 미리보기 열기:', file.name);
             
-            // Open file preview
-            this.openFilePreview(file);
+            // Open file preview - 수정: openFilePreview → previewFile
+            this.previewFile(file);
         }
         
         console.log('🔍 ===== 파일 더블클릭 디버깅 끝 =====');
