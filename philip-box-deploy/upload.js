@@ -401,42 +401,52 @@ class UploadManager {
                     await new Promise(resolve => setTimeout(resolve, 100));
                 }
                 
-                // Create file data
+                // Get current path MORE reliably with multiple fallbacks
+                let uploadPath = this.determineUploadPath(currentPath);
+                console.log('🔥 FINAL upload path determined:', uploadPath);
+                
+                // Create file data with correct path
                 const fileData = {
                     id: Utils.generateId(),
                     name: file.name,
                     size: file.size,
                     type: file.type === 'application/x-msdos-program' ? 'file' : (file.type.startsWith('image/') ? 'image' : file.type.startsWith('video/') ? 'video' : 'file'),
                     mimeType: file.type || 'application/octet-stream',
-                    path: currentPath,
+                    path: uploadPath,
                     created: new Date().toISOString(),
                     modified: new Date().toISOString(),
                     isLocal: true,
                     uploadedBy: window.authManager?.getCurrentUser()?.email || 'demo-user'
                 };
                 
+                console.log('📁 File data created:', {
+                    name: fileData.name,
+                    path: fileData.path,
+                    size: fileData.size
+                });
+                
                 // Generate thumbnail if supported
                 if (Utils.isThumbnailSupported(file.name)) {
                     try {
-                        console.log('Attempting to generate thumbnail for:', file.name, 'File type:', file.type, 'File size:', file.size);
+                        console.log('🖼️ Attempting to generate thumbnail for:', file.name);
                         
                         if (window.fileManager && typeof window.fileManager.generateRealThumbnail === 'function') {
                             const thumbnailData = await window.fileManager.generateRealThumbnail(fileData, file);
                             if (thumbnailData) {
                                 fileData.thumbnail = thumbnailData;
-                                console.log('✓ Thumbnail generated and stored for:', file.name);
+                                console.log('✅ Thumbnail generated and stored for:', file.name);
                             } else {
-                                console.log('⚠ No thumbnail data returned for:', file.name);
+                                console.log('⚠️ No thumbnail data returned for:', file.name);
                             }
                         } else {
-                            console.warn('FileManager or generateRealThumbnail method not available');
+                            console.warn('⚠️ FileManager or generateRealThumbnail method not available');
                         }
                     } catch (thumbnailError) {
-                        console.error('Failed to generate thumbnail for', file.name, ':', thumbnailError);
+                        console.error('❌ Failed to generate thumbnail for', file.name, ':', thumbnailError);
                         // Continue without thumbnail - not a critical error
                     }
                 } else {
-                    console.log('Thumbnail not supported for file type:', file.name);
+                    console.log('❌ Thumbnail not supported for file type:', file.name);
                 }
                 
                 // Store file in local storage
@@ -444,7 +454,8 @@ class UploadManager {
                 storedFiles.push(fileData);
                 localStorage.setItem('stored_files', JSON.stringify(storedFiles));
                 
-                console.log('File uploaded to local storage:', fileData.name, 'in path:', currentPath);
+                console.log('✅ File uploaded successfully:', fileData.name, 'in path:', uploadPath);
+                console.log('📊 Total stored files:', storedFiles.length);
                 
                 resolve({
                     success: true,
@@ -453,10 +464,78 @@ class UploadManager {
                 });
                 
             } catch (error) {
-                console.error('Local upload failed:', error);
+                console.error('❌ Local upload failed:', error);
                 reject(error);
             }
         });
+    }
+
+    // Determine upload path with multiple fallbacks
+    determineUploadPath(providedPath) {
+        console.log('🔍 Determining upload path...');
+        console.log('  📥 Provided path:', providedPath);
+        
+        let finalPath = '/';
+        
+        // Method 1: Use provided path if valid
+        if (providedPath && typeof providedPath === 'string' && providedPath.trim() !== '') {
+            finalPath = providedPath;
+            console.log('  ✅ Using provided path:', finalPath);
+        }
+        
+        // Method 2: Get from fileManager current path
+        else if (window.fileManager) {
+            if (window.fileManager.currentPath) {
+                finalPath = window.fileManager.currentPath;
+                console.log('  ✅ Using fileManager.currentPath:', finalPath);
+            }
+            else if (typeof window.fileManager.getCurrentPath === 'function') {
+                finalPath = window.fileManager.getCurrentPath();
+                console.log('  ✅ Using fileManager.getCurrentPath():', finalPath);
+            }
+        }
+        
+        // Method 3: Parse from URL
+        else {
+            try {
+                const urlParams = new URLSearchParams(window.location.search);
+                const pathFromUrl = urlParams.get('path');
+                if (pathFromUrl) {
+                    finalPath = decodeURIComponent(pathFromUrl);
+                    console.log('  ✅ Using URL path parameter:', finalPath);
+                }
+            } catch (error) {
+                console.log('  ⚠️ URL parsing failed:', error);
+            }
+        }
+        
+        // Normalize and validate path
+        finalPath = this.normalizePath(finalPath);
+        console.log('  🎯 Final normalized path:', finalPath);
+        
+        return finalPath;
+    }
+
+    // Normalize path to ensure consistency
+    normalizePath(path) {
+        if (!path || typeof path !== 'string') {
+            return '/';
+        }
+        
+        // Ensure starts with /
+        if (!path.startsWith('/')) {
+            path = '/' + path;
+        }
+        
+        // Remove double slashes
+        path = path.replace(/\/+/g, '/');
+        
+        // Remove trailing slash (except for root)
+        if (path.length > 1 && path.endsWith('/')) {
+            path = path.slice(0, -1);
+        }
+        
+        return path;
     }
 
     // Update upload progress

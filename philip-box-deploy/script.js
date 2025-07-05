@@ -560,6 +560,17 @@ document.addEventListener('visibilitychange', function() {
     }
 });
 
+// Handle page unload - only warn for uploads, not downloads
+window.addEventListener('beforeunload', function(e) {
+    // Only show warning for ongoing uploads, not for downloads
+    if (window.uploadManager?.isUploadInProgress() && !window.isDownloading) {
+        const message = '업로드가 진행 중입니다. 페이지를 떠나시겠습니까?';
+        e.preventDefault();
+        e.returnValue = message;
+        return message;
+    }
+});
+
 // Global utility functions
 window.utils = {
     // Format bytes

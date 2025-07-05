@@ -127,25 +127,33 @@ class FileManager {
 
     // Check for shared file in URL parameters
     checkForSharedFile() {
+        // Check both URL parameter and hash
         const urlParams = new URLSearchParams(window.location.search);
-        const shareId = urlParams.get('share');
+        const hashParams = new URLSearchParams(window.location.hash.substring(1));
+        
+        const shareId = urlParams.get('share') || hashParams.get('share');
         
         if (shareId) {
+            console.log('🔗 Found share ID in URL:', shareId);
+            
             // Wait for app to fully load, then show shared file
             setTimeout(() => {
-                this.loadSharedFile(shareId);
+                this.loadAndDisplaySharedFile(shareId);
             }, 1000);
         }
     }
 
-    // Load and display shared file
-    async loadSharedFile(shareId) {
+    // Load and display shared file with enhanced handling
+    async loadAndDisplaySharedFile(shareId) {
         try {
+            console.log('🔗 Loading shared file with ID:', shareId);
+            
             // Get share data from localStorage
             const shareData = localStorage.getItem(`share_${shareId}`);
             
             if (!shareData) {
-                Utils.showNotification('공유 링크가 유효하지 않습니다.', 'error');
+                Utils.showNotification('❌ 공유 링크가 유효하지 않습니다.', 'error');
+                this.cleanUpShareUrl();
                 return;
             }
             
@@ -153,7 +161,8 @@ class FileManager {
             
             // Check if share is expired
             if (parsedShareData.expiry && new Date(parsedShareData.expiry) < new Date()) {
-                Utils.showNotification('공유 링크가 만료되었습니다.', 'error');
+                Utils.showNotification('⏰ 공유 링크가 만료되었습니다.', 'error');
+                this.cleanUpShareUrl();
                 return;
             }
             
@@ -162,8 +171,8 @@ class FileManager {
             parsedShareData.lastAccessed = new Date().toISOString();
             localStorage.setItem(`share_${shareId}`, JSON.stringify(parsedShareData));
             
-            // Create file object for preview
-            const file = parsedShareData.fileData || {
+            // Create file object for preview with enhanced data
+            const file = {
                 id: parsedShareData.fileId,
                 name: parsedShareData.fileName,
                 size: parsedShareData.fileSize,
@@ -173,31 +182,113 @@ class FileManager {
                 created: parsedShareData.createdAt,
                 modified: parsedShareData.createdAt,
                 isShared: true,
-                shareId: shareId
+                shareId: shareId,
+                thumbnail: parsedShareData.fileData?.thumbnail,
+                shareData: parsedShareData
             };
             
+            console.log('✅ Shared file data loaded:', {
+                name: file.name,
+                size: file.size,
+                shareId: shareId
+            });
+            
             // Show success notification
-            Utils.showNotification(`공유된 파일 "${file.name}"을 열었습니다.`, 'success');
+            Utils.showNotification(`📂 공유된 파일 "${file.name}"을 열었습니다.`, 'success');
             
-            // Open preview modal for the shared file
-            if (window.previewManager) {
-                window.previewManager.showPreview(file);
-            } else {
-                // Wait a bit more if preview manager isn't ready
-                setTimeout(() => {
-                    if (window.previewManager) {
-                        window.previewManager.showPreview(file);
-                    }
-                }, 500);
-            }
+            // Show preview immediately
+            this.showSharedFilePreview(file);
             
-            // Clean URL without refreshing the page
-            const newUrl = window.location.origin + window.location.pathname;
-            window.history.replaceState({}, document.title, newUrl);
+            // Clean up URL
+            this.cleanUpShareUrl();
             
         } catch (error) {
-            console.error('Failed to load shared file:', error);
-            Utils.showNotification('공유된 파일을 불러오는데 실패했습니다.', 'error');
+            console.error('❌ Failed to load shared file:', error);
+            Utils.showNotification('❌ 공유된 파일을 불러오는데 실패했습니다.', 'error');
+            this.cleanUpShareUrl();
+        }
+    }
+
+    // Show shared file preview
+    showSharedFilePreview(file) {
+        console.log('🎭 Showing shared file preview for:', file.name);
+        
+        // Wait for preview manager to be ready
+        const showPreview = () => {
+            if (window.previewManager && typeof window.previewManager.showPreview === 'function') {
+                window.previewManager.showPreview(file);
+                console.log('✅ Shared file preview shown');
+            } else {
+                console.warn('⚠️ Preview manager not available, trying again...');
+                setTimeout(showPreview, 500);
+            }
+        };
+        
+        // Show preview after short delay to ensure UI is ready
+        setTimeout(showPreview, 200);
+    }
+
+    // Clean up share URL from address bar
+    cleanUpShareUrl() {
+        try {
+            // Remove share parameter from URL without refreshing page
+            const newUrl = window.location.origin + window.location.pathname;
+            window.history.replaceState({}, document.title, newUrl);
+            console.log('🧹 Share URL cleaned up');
+        } catch (error) {
+            console.error('⚠️ Failed to clean up share URL:', error);
+        }
+    }
+
+    // Enhanced test share link
+    testShareLink() {
+        const shareModal = document.getElementById('shareModal');
+        const shareLink = document.getElementById('shareLink');
+        
+        if (!shareLink.value) {
+            Utils.showNotification('❌ 공유 링크가 생성되지 않았습니다.', 'error');
+            return;
+        }
+        
+        console.log('🧪 Testing share link:', shareLink.value);
+        
+        // Extract share ID from URL (both # and ? formats)
+        let shareId = null;
+        
+        if (shareLink.value.includes('#share=')) {
+            shareId = shareLink.value.split('#share=')[1];
+        } else if (shareLink.value.includes('?share=')) {
+            shareId = shareLink.value.split('?share=')[1].split('&')[0];
+        }
+        
+        if (!shareId) {
+            Utils.showNotification('❌ 유효하지 않은 공유 링크입니다.', 'error');
+            return;
+        }
+        
+        // Check if share data exists
+        const shareData = localStorage.getItem(`share_${shareId}`);
+        if (!shareData) {
+            Utils.showNotification('❌ 공유 데이터를 찾을 수 없습니다.', 'error');
+            return;
+        }
+        
+        // Validate share data
+        try {
+            const parsedData = JSON.parse(shareData);
+            if (!parsedData.fileName || !parsedData.fileData) {
+                throw new Error('공유 데이터가 불완전합니다.');
+            }
+            
+            console.log('✅ Share link validation successful');
+            
+            // Open share link in new tab
+            window.open(shareLink.value, '_blank');
+            Utils.showNotification('✅ 공유 링크가 새 탭에서 열렸습니다.', 'success');
+            
+        } catch (error) {
+            console.error('❌ Share validation failed:', error);
+            Utils.showNotification('❌ 공유 링크 검증에 실패했습니다.', 'error');
         }
     }
 
@@ -1150,16 +1241,11 @@ class FileManager {
                         
                         let { width, height } = img;
                         
-                        if (width > height) {
-                            if (width > maxWidth) {
-                                height = (height * maxWidth) / width;
-                                width = maxWidth;
-                            }
-                        } else {
-                            if (height > maxHeight) {
-                                width = (width * maxHeight) / height;
-                                height = maxHeight;
-                            }
+                        // Scale down if too large
+                        if (width > maxWidth || height > maxHeight) {
+                            const ratio = Math.min(maxWidth / width, maxHeight / height);
+                            width *= ratio;
+                            height *= ratio;
                         }
                         
                         canvas.width = width;
@@ -1171,8 +1257,8 @@ class FileManager {
                         ctx.drawImage(img, 0, 0, width, height);
                         
                         // Convert to data URL
-                        const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
-                        console.log('Thumbnail data URL generated, size:', dataUrl.length, 'chars');
+                        const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+                        console.log('Thumbnail generated successfully');
                         
                         resolve(dataUrl);
                     } catch (error) {
@@ -1204,24 +1290,39 @@ class FileManager {
             console.log('Starting video thumbnail generation from file');
             
             const video = document.createElement('video');
-            video.style.display = 'none';
-            video.muted = true; // Important for autoplay policies
+            video.style.position = 'absolute';
+            video.style.top = '-9999px';
+            video.style.left = '-9999px';
+            video.muted = true;
+            video.playsInline = true;
             video.preload = 'metadata';
             
             // Add to DOM temporarily
             document.body.appendChild(video);
             
             const cleanup = () => {
-                if (video.parentNode) {
-                    document.body.removeChild(video);
+                try {
+                    if (video.parentNode) {
+                        document.body.removeChild(video);
+                    }
+                    if (video.src) {
+                        URL.revokeObjectURL(video.src);
+                    }
+                } catch (e) {
+                    console.error('Cleanup error:', e);
                 }
-                URL.revokeObjectURL(video.src);
             };
+            
+            const timeoutId = setTimeout(() => {
+                console.warn('Video thumbnail generation timeout');
+                cleanup();
+                reject(new Error('Video thumbnail generation timeout'));
+            }, 8000);
             
             video.onloadedmetadata = () => {
                 console.log('Video metadata loaded, duration:', video.duration);
-                // Seek to 10% of video duration for thumbnail, or 1 second if short
-                const seekTime = Math.min(video.duration * 0.1, 1);
+                // Seek to 1 second or 10% of video duration
+                const seekTime = Math.min(1, video.duration * 0.1);
                 video.currentTime = seekTime;
                 console.log('Seeking to time:', seekTime);
             };
@@ -1241,13 +1342,15 @@ class FileManager {
                     ctx.drawImage(video, 0, 0, 200, 150);
                     
                     // Convert to data URL
-                    const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+                    const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
                     console.log('Video thumbnail generated successfully');
                     
+                    clearTimeout(timeoutId);
                     cleanup();
                     resolve(dataUrl);
                 } catch (error) {
                     console.error('Error creating video thumbnail canvas:', error);
+                    clearTimeout(timeoutId);
                     cleanup();
                     reject(error);
                 }
@@ -1255,21 +1358,22 @@ class FileManager {
             
             video.onerror = (error) => {
                 console.error('Video error during thumbnail generation:', error);
+                clearTimeout(timeoutId);
                 cleanup();
                 reject(new Error('Failed to load video'));
             };
             
-            // Set timeout to avoid hanging
-            setTimeout(() => {
-                console.warn('Video thumbnail generation timeout');
-                cleanup();
-                reject(new Error('Video thumbnail generation timeout'));
-            }, 10000);
-            
             // Create object URL and set as source
-            const videoUrl = URL.createObjectURL(fileObject);
-            video.src = videoUrl;
-            console.log('Video source set, waiting for metadata...');
+            try {
+                const videoUrl = URL.createObjectURL(fileObject);
+                video.src = videoUrl;
+                console.log('Video source set, waiting for metadata...');
+            } catch (error) {
+                console.error('Error setting video source:', error);
+                clearTimeout(timeoutId);
+                cleanup();
+                reject(error);
+            }
         });
     }
 
@@ -1434,175 +1538,170 @@ class FileManager {
 
     // Download file securely (wrapper for UI buttons)
     async downloadFileSecurely(file) {
+        console.log('🔥 Starting SECURE download for:', file.name);
+        
         try {
-            // Prevent any default actions
-            if (event) {
-                event.preventDefault();
-                event.stopPropagation();
-                event.stopImmediatePropagation();
-            }
+            // Prevent any popup or navigation warnings
+            window.isDownloading = true;
             
-            // Use the main download method
-            await this.downloadFile(file);
+            // Create file content first
+            const content = this.createFileContent(file);
+            console.log('✓ File content created, length:', content.length);
             
-        } catch (error) {
-            console.error('Download failed:', error);
-            Utils.showNotification('다운로드에 실패했습니다.', 'error');
-        }
-    }
-
-    // Download file - 완전히 새로운 단순한 다운로드 방식
-    async downloadFile(file) {
-        try {
-            console.log('Starting download for:', file.name);
-            
-            // Show loading notification
-            Utils.showNotification(`${file.name} 다운로드 준비 중...`, 'info');
-            
-            // Create download content
-            const downloadContent = this.createDownloadContent(file);
-            
-            // Create and trigger download
-            this.triggerDownload(downloadContent, file.name);
+            // Create download immediately
+            this.triggerSecureDownload(file.name, content);
             
             // Show success notification
-            Utils.showNotification(`${file.name} 다운로드 완료`, 'success');
+            Utils.showNotification(`✅ ${file.name} 다운로드 완료`, 'success');
             
             // Add to recent files
             this.addToRecentFiles(file);
             
+            console.log('✅ Download completed successfully');
+            
         } catch (error) {
-            console.error('Download failed:', error);
-            Utils.showNotification(`${file.name} 다운로드 실패: ${error.message}`, 'error');
+            console.error('❌ Download failed:', error);
+            Utils.showNotification(`❌ ${file.name} 다운로드 실패`, 'error');
+        } finally {
+            // Always reset download flag
+            setTimeout(() => {
+                window.isDownloading = false;
+                console.log('🔄 Download flag reset');
+            }, 3000);
         }
     }
 
-    // Create download content
-    createDownloadContent(file) {
-        const fileExtension = file.name.split('.').pop()?.toLowerCase() || 'txt';
+    // Create file content (simple and reliable)
+    createFileContent(file) {
+        const extension = file.name.split('.').pop()?.toLowerCase() || 'txt';
         
-        // Create appropriate demo content based on file type
-        switch (fileExtension) {
+        const basicInfo = `
+📁 파일명: ${file.name}
+📊 크기: ${Utils.formatFileSize(file.size || 1024)}
+📅 생성일: ${file.created || new Date().toISOString()}
+📝 수정일: ${file.modified || new Date().toISOString()}
+🏷️ 타입: ${file.mimeType || 'Unknown'}
+
+🌟 Philip Box 데모 파일입니다.
+실제 애플리케이션에서는 여기에 실제 파일 내용이 표시됩니다.
+        `.trim();
+
+        switch (extension) {
             case 'txt':
-                return `This is a demo file: ${file.name}
-
-Created: ${file.created || new Date().toISOString()}
-Size: ${Utils.formatFileSize(file.size || 1024)}
-
-This is demonstration content for the Philip Box dropbox clone.
-In a real application, this would be the actual file content.
-
-Thank you for testing Philip Box!`;
-
+                return basicInfo;
+                
+            case 'json':
+                return JSON.stringify({
+                    fileName: file.name,
+                    size: file.size || 1024,
+                    created: file.created || new Date().toISOString(),
+                    modified: file.modified || new Date().toISOString(),
+                    demo: true,
+                    content: "Philip Box 데모 JSON 파일입니다."
+                }, null, 2);
+                
             case 'html':
                 return `<!DOCTYPE html>
 <html>
 <head>
     <title>${file.name}</title>
+    <meta charset="UTF-8">
 </head>
 <body>
-    <h1>Demo File: ${file.name}</h1>
-    <p>This is a demonstration HTML file.</p>
-    <p>Created: ${file.created || new Date().toISOString()}</p>
-    <p>Size: ${Utils.formatFileSize(file.size || 1024)}</p>
+    <h1>📁 ${file.name}</h1>
+    <p>🌟 Philip Box 데모 HTML 파일입니다.</p>
+    <pre>${basicInfo}</pre>
 </body>
 </html>`;
 
-            case 'json':
-                return JSON.stringify({
-                    fileName: file.name,
-                    created: file.created || new Date().toISOString(),
-                    size: file.size || 1024,
-                    type: file.type || 'file',
-                    demo: true,
-                    message: 'This is a demo JSON file for Philip Box'
-                }, null, 2);
-
             case 'csv':
-                return `Name,Type,Size,Created
-${file.name},${file.type || 'file'},${file.size || 1024},${file.created || new Date().toISOString()}
-Demo File 1,file,2048,${new Date().toISOString()}
-Demo File 2,folder,0,${new Date().toISOString()}`;
-
-            case 'md':
-                return `# ${file.name}
-
-## Demo File
-
-This is a demonstration markdown file for Philip Box.
-
-- **Created**: ${file.created || new Date().toISOString()}
-- **Size**: ${Utils.formatFileSize(file.size || 1024)}
-- **Type**: ${file.type || 'file'}
-
-### About Philip Box
-
-Philip Box is a modern dropbox clone with the following features:
-
-- File upload and download
-- File sharing with links
-- File organization
-- Search functionality
-- And much more!
-
-Thank you for testing Philip Box!`;
+                return `파일명,크기,생성일,타입
+${file.name},"${Utils.formatFileSize(file.size || 1024)}","${file.created || new Date().toISOString()}","${file.mimeType || 'Unknown'}"
+데모파일1.txt,1024,"${new Date().toISOString()}",text/plain
+데모파일2.json,2048,"${new Date().toISOString()}",application/json`;
 
             default:
-                return `Demo file: ${file.name}
-
-This is a demonstration file for Philip Box.
-File type: ${fileExtension}
-Created: ${file.created || new Date().toISOString()}
-Size: ${Utils.formatFileSize(file.size || 1024)}
-
-In a real application, this would contain the actual file content.
-
-Philip Box - Your files, anywhere, anytime.`;
+                return basicInfo;
         }
     }
 
-    // Trigger download without any alerts or beforeunload interference
-    triggerDownload(content, fileName) {
+    // Trigger secure download (no navigation alerts)
+    triggerSecureDownload(fileName, content) {
+        console.log('🚀 Triggering secure download for:', fileName);
+        
         try {
             // Determine MIME type
             const extension = fileName.split('.').pop()?.toLowerCase() || 'txt';
-            const mimeType = this.getMimeType(extension);
+            const mimeType = this.getFileMimeType(extension);
             
-            // Create blob
+            // Create blob with proper MIME type
             const blob = new Blob([content], { type: mimeType });
+            console.log('✓ Blob created, size:', blob.size, 'type:', blob.type);
             
-            // Create download URL
-            const url = URL.createObjectURL(blob);
+            // Create object URL
+            const downloadUrl = URL.createObjectURL(blob);
+            console.log('✓ Download URL created');
             
-            // Create download link
-            const link = document.createElement('a');
-            link.href = url;
-            link.download = fileName;
-            link.style.display = 'none';
-            link.style.visibility = 'hidden';
-            link.style.position = 'absolute';
-            link.style.left = '-9999px';
+            // Create download element
+            const downloadLink = document.createElement('a');
+            downloadLink.href = downloadUrl;
+            downloadLink.download = fileName;
+            downloadLink.style.cssText = 'display:none!important;position:absolute!important;left:-9999px!important;';
             
-            // Add to DOM
-            document.body.appendChild(link);
+            // Add to document
+            document.body.appendChild(downloadLink);
+            console.log('✓ Download link added to DOM');
             
-            // Trigger download
-            link.click();
+            // Force download
+            downloadLink.click();
+            console.log('✓ Download triggered');
             
-            // Clean up immediately
+            // Cleanup after short delay
             setTimeout(() => {
-                document.body.removeChild(link);
-                URL.revokeObjectURL(url);
-            }, 100);
+                document.body.removeChild(downloadLink);
+                URL.revokeObjectURL(downloadUrl);
+                console.log('✓ Download cleanup completed');
+            }, 1000);
             
         } catch (error) {
-            console.error('Download trigger failed:', error);
+            console.error('❌ Secure download failed:', error);
             throw error;
         }
     }
 
     // Get MIME type for file extension
-    getMimeType(extension) {
+    getFileMimeType(extension) {
+        const mimeTypes = {
+            'txt': 'text/plain; charset=utf-8',
+            'html': 'text/html; charset=utf-8',
+            'css': 'text/css; charset=utf-8',
+            'js': 'application/javascript; charset=utf-8',
+            'json': 'application/json; charset=utf-8',
+            'xml': 'application/xml; charset=utf-8',
+            'csv': 'text/csv; charset=utf-8',
+            'md': 'text/markdown; charset=utf-8',
+            'pdf': 'application/pdf',
+            'jpg': 'image/jpeg',
+            'jpeg': 'image/jpeg',
+            'png': 'image/png',
+            'gif': 'image/gif',
+            'svg': 'image/svg+xml',
+            'mp4': 'video/mp4',
+            'mp3': 'audio/mpeg',
+            'zip': 'application/zip'
+        };
+        
+        return mimeTypes[extension] || 'application/octet-stream';
+    }
+
+    // Download file - 간단한 래퍼
+    async downloadFile(file) {
+        return this.downloadFileSecurely(file);
+    }
+
+    // Get MIME type for file extension
+    getMimeType(fileName) {
+        const extension = fileName.split('.').pop()?.toLowerCase() || 'txt';
         const mimeTypes = {
             'txt': 'text/plain',
             'html': 'text/html',
@@ -1828,9 +1927,12 @@ Philip Box - Your files, anywhere, anytime.`;
     // Generate local share URL with complete file information
     generateLocalShareUrl(file, shareType, permissions, expiry) {
         const shareId = this.generateShareToken();
-        const shareUrl = `${window.location.origin}/index.html?share=${shareId}`;
+        // Create proper share URL that points to individual file
+        const shareUrl = `${window.location.origin}${window.location.pathname}#share=${shareId}`;
         
-        // Store complete share information
+        console.log('🔗 Creating share URL:', shareUrl, 'for file:', file.name);
+        
+        // Store complete share information with enhanced data
         const shareData = {
             shareId: shareId,
             fileId: file.id,
@@ -1855,7 +1957,9 @@ Philip Box - Your files, anywhere, anytime.`;
                 path: file.path || this.getCurrentPath(),
                 created: file.created,
                 modified: file.modified,
-                thumbnail: file.thumbnail
+                thumbnail: file.thumbnail,
+                isShared: true,
+                shareId: shareId
             }
         };
         
@@ -1875,7 +1979,12 @@ Philip Box - Your files, anywhere, anytime.`;
         };
         localStorage.setItem('file_shares', JSON.stringify(fileShares));
         
-        console.log('Share created:', shareData);
+        console.log('✅ Share created successfully:', {
+            shareId: shareId,
+            fileName: file.name,
+            shareUrl: shareUrl
+        });
+        
         return shareUrl;
     }
 
@@ -1965,21 +2074,30 @@ Philip Box - Your files, anywhere, anytime.`;
         const shareLink = document.getElementById('shareLink');
         
         if (!shareLink.value) {
-            Utils.showNotification('공유 링크가 생성되지 않았습니다.', 'error');
+            Utils.showNotification('❌ 공유 링크가 생성되지 않았습니다.', 'error');
             return;
         }
         
-        // Extract share ID from URL
-        const shareId = shareLink.value.split('#')[1];
+        console.log('🧪 Testing share link:', shareLink.value);
+        
+        // Extract share ID from URL (both # and ? formats)
+        let shareId = null;
+        
+        if (shareLink.value.includes('#share=')) {
+            shareId = shareLink.value.split('#share=')[1];
+        } else if (shareLink.value.includes('?share=')) {
+            shareId = shareLink.value.split('?share=')[1].split('&')[0];
+        }
+        
         if (!shareId) {
-            Utils.showNotification('유효하지 않은 공유 링크입니다.', 'error');
+            Utils.showNotification('❌ 유효하지 않은 공유 링크입니다.', 'error');
             return;
         }
         
         // Check if share data exists
         const shareData = localStorage.getItem(`share_${shareId}`);
         if (!shareData) {
-            Utils.showNotification('공유 데이터를 찾을 수 없습니다.', 'error');
+            Utils.showNotification('❌ 공유 데이터를 찾을 수 없습니다.', 'error');
             return;
         }
         
@@ -1990,13 +2108,15 @@ Philip Box - Your files, anywhere, anytime.`;
                 throw new Error('공유 데이터가 불완전합니다.');
             }
             
+            console.log('✅ Share link validation successful');
+            
             // Open share link in new tab
             window.open(shareLink.value, '_blank');
-            Utils.showNotification('공유 링크가 새 탭에서 열렸습니다.', 'success');
+            Utils.showNotification('✅ 공유 링크가 새 탭에서 열렸습니다.', 'success');
             
         } catch (error) {
-            console.error('Share validation failed:', error);
-            Utils.showNotification('공유 링크 검증에 실패했습니다.', 'error');
+            console.error('❌ Share validation failed:', error);
+            Utils.showNotification('❌ 공유 링크 검증에 실패했습니다.', 'error');
         }
     }
 

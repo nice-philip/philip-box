@@ -525,8 +525,8 @@ document.addEventListener('visibilitychange', function() {
 
 // Handle page unload
 window.addEventListener('beforeunload', function(e) {
-    // Check for ongoing uploads
-    if (window.uploadManager?.isUploadInProgress()) {
+    // Only show warning for ongoing uploads, not for downloads
+    if (window.uploadManager?.isUploadInProgress() && !window.isDownloading) {
         const message = '업로드가 진행 중입니다. 페이지를 떠나시겠습니까?';
         e.preventDefault();
         e.returnValue = message;
