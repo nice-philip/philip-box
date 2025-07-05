@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>간단한 파일 공유기 - Philip Box</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      background: #f0f4f8;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 50px;
+      min-height: 100vh;
+    }
+    .container {
+      background: white;
+      border-radius: 10px;
+      padding: 30px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+      text-align: center;
+      width: 400px;
+      margin-bottom: 20px;
+    }
+    input[type="file"] {
+      margin-bottom: 20px;
+      padding: 10px;
+      border: 2px dashed #007bff;
+      border-radius: 5px;
+      width: 100%;
+      background: #f8f9ff;
+    }
+    button {
+      padding: 12px 24px;
+      border: none;
+      background: #007bff;
+      color: white;
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 16px;
+      margin: 5px;
+    }
+    button:hover {
+      background: #0056b3;
+    }
+    .link {
+      margin-top: 20px;
+      word-break: break-all;
+      font-size: 14px;
+      color: #333;
+      padding: 15px;
+      background: #e8f4f8;
+      border-radius: 5px;
+      text-align: left;
+    }
+    .file-info {
+      margin-top: 15px;
+      padding: 10px;
+      background: #f8f9fa;
+      border-radius: 5px;
+      font-size: 14px;
+    }
+    .shared-files {
+      margin-top: 30px;
+      text-align: left;
+    }
+    .shared-file {
+      padding: 10px;
+      margin: 5px 0;
+      background: #fff;
+      border: 1px solid #ddd;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+    .shared-file:hover {
+      background: #f0f8ff;
+    }
+    .download-section {
+      margin-top: 30px;
+      padding: 20px;
+      background: #fff3cd;
+      border-radius: 5px;
+      border: 1px solid #ffeaa7;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <h2>📁 간단한 파일 공유기</h2>
+    <p>파일을 선택하고 공유 링크를 생성하세요</p>
+    
+    <input type="file" id="fileInput" multiple />
+    <div class="file-info" id="fileInfo"></div>
+    
+    <button onclick="generateShareLink()">🔗 공유 링크 생성</button>
+    <button onclick="clearAll()">🗑️ 모두 삭제</button>
+    
+    <div class="link" id="shareResult"></div>
+  </div>
+
+  <div class="container">
+    <h3>📋 공유된 파일 목록</h3>
+    <div class="shared-files" id="sharedFiles"></div>
+  </div>
+
+  <div class="container download-section" id="downloadSection" style="display: none;">
+    <h3>⬇️ 다운로드</h3>
+    <div id="downloadContent"></div>
+  </div>
+
+  <script>
+    // 페이지 로드 시 초기화
+    window.onload = function() {
+      loadSharedFiles();
+      checkForDownload();
+    };
+
+    // 파일 선택 시 정보 표시
+    document.getElementById('fileInput').addEventListener('change', function() {
+      const files = this.files;
+      const fileInfo = document.getElementById('fileInfo');
+      
+      if (files.length === 0) {
+        fileInfo.innerHTML = '';
+        return;
+      }
+
+      let info = `<strong>선택된 파일 (${files.length}개):</strong><br>`;
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        const size = formatFileSize(file.size);
+        info += `📄 ${file.name} (${size})<br>`;
+      }
+      fileInfo.innerHTML = info;
+    });
+
+    function generateShareLink() {
+      const fileInput = document.getElementById("fileInput");
+      const files = fileInput.files;
+
+      if (files.length === 0) {
+        alert("파일을 선택해주세요.");
+        return;
+      }
+
+      // 파일들을 저장하고 공유 링크 생성
+      const shareId = generateId();
+      const shareData = {
+        id: shareId,
+        files: [],
+        createdAt: new Date().toISOString(),
+        accessCount: 0
+      };
+
+      // 파일 데이터를 읽어서 저장
+      let processedFiles = 0;
+      
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        const reader = new FileReader();
+        
+        reader.onload = function(e) {
+          shareData.files.push({
+            name: file.name,
+            size: file.size,
+            type: file.type,
+            data: e.target.result,
+            lastModified: file.lastModified
+          });
+          
+          processedFiles++;
+          
+          if (processedFiles === files.length) {
+            // 모든 파일 처리 완료
+            saveShareData(shareData);
+            showShareResult(shareData);
+            loadSharedFiles();
+          }
+        };
+        
+        reader.readAsDataURL(file);
+      }
+    }
+
+    function saveShareData(shareData) {
+      const allShares = JSON.parse(localStorage.getItem('philipbox_shares') || '{}');
+      allShares[shareData.id] = shareData;
+      localStorage.setItem('philipbox_shares', JSON.stringify(allShares));
+    }
+
+    function showShareResult(shareData) {
+      const shareResult = document.getElementById('shareResult');
+      const shareUrl = `${window.location.origin}${window.location.pathname}?share=${shareData.id}`;
+      
+      shareResult.innerHTML = `
+        <strong>✅ 공유 링크가 생성되었습니다!</strong><br><br>
+        <strong>공유 링크:</strong><br>
+        <a href="${shareUrl}" target="_blank" style="color: #007bff;">${shareUrl}</a><br><br>
+        <button onclick="copyToClipboard('${shareUrl}')" style="background: #28a745;">📋 링크 복사</button>
+        <button onclick="window.open('${shareUrl}', '_blank')" style="background: #17a2b8;">🔗 링크 열기</button><br><br>
+        <small>📝 파일 ${shareData.files.length}개가 공유되었습니다.</small>
+      `;
+    }
+
+    function generateId() {
+      return Date.now().toString(36) + Math.random().toString(36).substr(2);
+    }
+
+    function copyToClipboard(text) {
+      navigator.clipboard.writeText(text).then(function() {
+        alert('📋 링크가 클립보드에 복사되었습니다!');
+      }, function(err) {
+        console.error('복사 실패:', err);
+        // 대체 방법
+        const textArea = document.createElement('textarea');
+        textArea.value = text;
+        document.body.appendChild(textArea);
+        textArea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textArea);
+        alert('📋 링크가 클립보드에 복사되었습니다!');
+      });
+    }
+
+    function loadSharedFiles() {
+      const allShares = JSON.parse(localStorage.getItem('philipbox_shares') || '{}');
+      const sharedFilesDiv = document.getElementById('sharedFiles');
+      
+      const shareIds = Object.keys(allShares);
+      
+      if (shareIds.length === 0) {
+        sharedFilesDiv.innerHTML = '<p style="text-align: center; color: #666;">공유된 파일이 없습니다.</p>';
+        return;
+      }
+
+      let html = '';
+      shareIds.forEach(shareId => {
+        const shareData = allShares[shareId];
+        const createdAt = new Date(shareData.createdAt).toLocaleString('ko-KR');
+        const fileCount = shareData.files.length;
+        
+        html += `
+          <div class="shared-file" onclick="viewSharedFile('${shareId}')">
+            <strong>📁 공유 ID: ${shareId}</strong><br>
+            <small>📅 생성일: ${createdAt}</small><br>
+            <small>📄 파일 수: ${fileCount}개</small><br>
+            <small>👀 접근 횟수: ${shareData.accessCount}회</small>
+            <button onclick="event.stopPropagation(); deleteShare('${shareId}')" style="background: #dc3545; font-size: 12px; padding: 5px 10px; margin-top: 5px;">🗑️ 삭제</button>
+          </div>
+        `;
+      });
+      
+      sharedFilesDiv.innerHTML = html;
+    }
+
+    function viewSharedFile(shareId) {
+      const shareUrl = `${window.location.origin}${window.location.pathname}?share=${shareId}`;
+      window.open(shareUrl, '_blank');
+    }
+
+    function deleteShare(shareId) {
+      if (confirm('이 공유를 삭제하시겠습니까?')) {
+        const allShares = JSON.parse(localStorage.getItem('philipbox_shares') || '{}');
+        delete allShares[shareId];
+        localStorage.setItem('philipbox_shares', JSON.stringify(allShares));
+        loadSharedFiles();
+        alert('🗑️ 공유가 삭제되었습니다.');
+      }
+    }
+
+    function clearAll() {
+      if (confirm('모든 공유를 삭제하시겠습니까?')) {
+        localStorage.removeItem('philipbox_shares');
+        document.getElementById('shareResult').innerHTML = '';
+        document.getElementById('fileInfo').innerHTML = '';
+        document.getElementById('fileInput').value = '';
+        loadSharedFiles();
+        alert('🗑️ 모든 공유가 삭제되었습니다.');
+      }
+    }
+
+    // URL에서 공유 ID 확인하여 다운로드 섹션 표시
+    function checkForDownload() {
+      const urlParams = new URLSearchParams(window.location.search);
+      const shareId = urlParams.get('share');
+      
+      if (shareId) {
+        showDownloadSection(shareId);
+      }
+    }
+
+    function showDownloadSection(shareId) {
+      const allShares = JSON.parse(localStorage.getItem('philipbox_shares') || '{}');
+      const shareData = allShares[shareId];
+      
+      if (!shareData) {
+        document.getElementById('downloadSection').style.display = 'block';
+        document.getElementById('downloadContent').innerHTML = `
+          <p style="color: #dc3545;">❌ 공유 파일을 찾을 수 없습니다.</p>
+          <p>공유 ID: ${shareId}</p>
+        `;
+        return;
+      }
+
+      // 접근 횟수 증가
+      shareData.accessCount = (shareData.accessCount || 0) + 1;
+      allShares[shareId] = shareData;
+      localStorage.setItem('philipbox_shares', JSON.stringify(allShares));
+
+      const downloadSection = document.getElementById('downloadSection');
+      const downloadContent = document.getElementById('downloadContent');
+      
+      downloadSection.style.display = 'block';
+      
+      let html = `
+        <p><strong>📁 공유된 파일 (${shareData.files.length}개)</strong></p>
+        <p><small>📅 생성일: ${new Date(shareData.createdAt).toLocaleString('ko-KR')}</small></p>
+        <hr>
+      `;
+      
+      shareData.files.forEach((file, index) => {
+        html += `
+          <div style="margin: 10px 0; padding: 10px; background: white; border-radius: 5px;">
+            <strong>📄 ${file.name}</strong><br>
+            <small>📊 크기: ${formatFileSize(file.size)}</small><br>
+            <small>🏷️ 타입: ${file.type}</small><br>
+            <button onclick="downloadFile('${shareId}', ${index})" style="background: #28a745; margin-top: 5px;">
+              ⬇️ 다운로드
+            </button>
+          </div>
+        `;
+      });
+      
+      html += `
+        <hr>
+        <button onclick="downloadAllFiles('${shareId}')" style="background: #007bff; font-size: 16px;">
+          📦 모든 파일 다운로드
+        </button>
+      `;
+      
+      downloadContent.innerHTML = html;
+    }
+
+    function downloadFile(shareId, fileIndex) {
+      const allShares = JSON.parse(localStorage.getItem('philipbox_shares') || '{}');
+      const shareData = allShares[shareId];
+      
+      if (!shareData || !shareData.files[fileIndex]) {
+        alert('❌ 파일을 찾을 수 없습니다.');
+        return;
+      }
+
+      const file = shareData.files[fileIndex];
+      
+      // Data URL을 Blob으로 변환
+      const dataURL = file.data;
+      const byteCharacters = atob(dataURL.split(',')[1]);
+      const byteNumbers = new Array(byteCharacters.length);
+      
+      for (let i = 0; i < byteCharacters.length; i++) {
+        byteNumbers[i] = byteCharacters.charCodeAt(i);
+      }
+      
+      const byteArray = new Uint8Array(byteNumbers);
+      const blob = new Blob([byteArray], { type: file.type });
+      
+      // 다운로드 링크 생성
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = file.name;
+      a.style.display = 'none';
+      
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      
+      URL.revokeObjectURL(url);
+      
+      alert(`✅ ${file.name} 다운로드가 시작되었습니다.`);
+    }
+
+    function downloadAllFiles(shareId) {
+      const allShares = JSON.parse(localStorage.getItem('philipbox_shares') || '{}');
+      const shareData = allShares[shareId];
+      
+      if (!shareData || shareData.files.length === 0) {
+        alert('❌ 파일을 찾을 수 없습니다.');
+        return;
+      }
+
+      shareData.files.forEach((file, index) => {
+        setTimeout(() => {
+          downloadFile(shareId, index);
+        }, index * 500); // 500ms 간격으로 다운로드
+      });
+      
+      alert(`📦 ${shareData.files.length}개 파일의 다운로드가 시작됩니다.`);
+    }
+
+    function formatFileSize(bytes) {
+      if (bytes === 0) return '0 Bytes';
+      const k = 1024;
+      const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+      const i = Math.floor(Math.log(bytes) / Math.log(k));
+      return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    }
+  </script>
+
+</body>
+</html> 

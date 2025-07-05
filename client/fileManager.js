@@ -18,8 +18,13 @@ class FileManager {
         this.initializeFileManager();
     }
 
-    // Initialize file manager
+    // Initialize file manager with better loading state management
     initializeFileManager() {
+        console.log('🚀 Initializing File Manager...');
+        
+        // Show initial loading state
+        this.showInitialLoadingState();
+        
         this.loadPreferences();
         this.setupEventListeners();
         this.setupModalEventListeners();
@@ -38,20 +43,80 @@ class FileManager {
         this.waitForAuthAndLoadFolder();
     }
 
-    // Wait for authentication and then load folder
+    // Show initial loading state to prevent empty folder confusion
+    showInitialLoadingState() {
+        const fileList = document.getElementById('fileList');
+        if (fileList) {
+            fileList.innerHTML = `
+                <div class="initial-loading-state">
+                    <div class="loading-icon">
+                        <i class="fas fa-spinner fa-spin"></i>
+                    </div>
+                    <div class="loading-text">
+                        <h3>Philip Box 로딩 중...</h3>
+                        <p>사용자 인증 및 파일 목록을 불러오고 있습니다.</p>
+                    </div>
+                </div>
+            `;
+        }
+        
+        console.log('✅ Initial loading state displayed');
+    }
+
+    // Wait for authentication and then load folder with better state management
     waitForAuthAndLoadFolder() {
+        console.log('⏳ Waiting for authentication...');
+        
         if (window.authManager && window.authManager.isInitialized()) {
             if (window.authManager.isAuthenticated()) {
+                console.log('✅ Already authenticated, loading files immediately');
                 this.loadInitialFolderFromUrl();
+            } else {
+                console.log('❌ Not authenticated, showing login');
+                this.showNotAuthenticatedState();
             }
         } else {
-            // Wait for auth initialization
+            console.log('⏳ Auth manager not ready, waiting for auth-initialized event');
+            
+            // Wait for auth initialization with timeout
+            const authTimeout = setTimeout(() => {
+                console.warn('⚠️ Authentication timeout, showing login');
+                this.showNotAuthenticatedState();
+            }, 5000); // 5 second timeout
+            
             document.addEventListener('auth-initialized', (event) => {
+                clearTimeout(authTimeout);
+                console.log('🔔 Auth-initialized event received:', event.detail);
+                
                 if (event.detail.authenticated) {
+                    console.log('✅ User authenticated, loading files');
                     this.loadInitialFolderFromUrl();
+                } else {
+                    console.log('❌ User not authenticated, showing login');
+                    this.showNotAuthenticatedState();
                 }
             });
         }
+    }
+
+    // Show state when user is not authenticated
+    showNotAuthenticatedState() {
+        const fileList = document.getElementById('fileList');
+        if (fileList) {
+            fileList.innerHTML = `
+                <div class="auth-required-state">
+                    <div class="auth-icon">
+                        <i class="fas fa-lock"></i>
+                    </div>
+                    <div class="auth-text">
+                        <h3>로그인이 필요합니다</h3>
+                        <p>파일에 접근하려면 먼저 로그인하세요.</p>
+                    </div>
+                </div>
+            `;
+        }
+        
+        console.log('🔒 Not authenticated state displayed');
     }
 
     // Setup URL-based navigation
@@ -288,11 +353,11 @@ class FileManager {
             return;
         }
         
-        console.log('🧪 Testing INDEPENDENT share link:', shareLink.value);
+        console.log('🧪 Testing CORRECTED share link:', shareLink.value);
         
-        // Validate that this is an independent share link
-        if (!shareLink.value.includes('/share.html')) {
-            Utils.showNotification('❌ 독립적인 공유 링크가 아닙니다. 다시 생성해주세요.', 'error');
+        // Validate that this is a valid share link
+        if (!shareLink.value.includes('share.html')) {
+            Utils.showNotification('❌ 유효한 공유 링크가 아닙니다. 다시 생성해주세요.', 'error');
             return;
         }
         
@@ -322,20 +387,20 @@ class FileManager {
                 throw new Error('공유 데이터가 불완전합니다.');
             }
             
-            console.log('✅ INDEPENDENT share link validation successful:', {
+            console.log('✅ CORRECTED share link validation successful:', {
                 shareId: shareId,
                 fileName: parsedData.fileName,
                 url: shareLink.value,
-                isIndependent: true
+                isValid: true
             });
             
             // Open share link in new tab
             window.open(shareLink.value, '_blank');
-            Utils.showNotification('✅ 독립적인 공유 페이지가 새 탭에서 열렸습니다.', 'success');
+            Utils.showNotification('✅ 공유 링크가 새 탭에서 열렸습니다.');
             
         } catch (error) {
             console.error('❌ Share validation failed:', error);
-            Utils.showNotification('❌ 공유 링크 검증에 실패했습니다.', 'error');
+            Utils.showNotification('❌ 공유 데이터 검증에 실패했습니다.', 'error');
         }
     }
 
@@ -815,10 +880,18 @@ class FileManager {
         });
     }
 
-    // Load files
+    // Load files with improved loading state management
     async loadFiles(path = this.currentPath) {
         try {
-            Utils.showLoading(true);
+            console.log('📂 Loading files for path:', path, 'section:', this.currentSection);
+            
+            // Show loading only if not in initial loading state
+            const fileList = document.getElementById('fileList');
+            const isInitialLoad = fileList && fileList.innerHTML.includes('initial-loading-state');
+            
+            if (!isInitialLoad) {
+                Utils.showLoading(true);
+            }
 
             // Handle different sections
             if (this.currentSection === CONFIG.FILE_SECTIONS.SHARED) {
@@ -829,6 +902,7 @@ class FileManager {
                 
                 this.renderFiles();
                 this.updateBreadcrumb();
+                console.log('✅ Shared files loaded:', this.currentFiles.length);
                 return;
             }
             
@@ -839,6 +913,7 @@ class FileManager {
                 
                 this.renderFiles();
                 this.updateBreadcrumb();
+                console.log('✅ Recent files loaded:', this.currentFiles.length);
                 return;
             }
             
@@ -851,6 +926,7 @@ class FileManager {
                 
                 this.renderFiles();
                 this.updateBreadcrumb();
+                console.log('✅ Important files loaded:', this.currentFiles.length);
                 return;
             }
             
@@ -861,6 +937,7 @@ class FileManager {
                 
                 this.renderFiles();
                 this.updateBreadcrumb();
+                console.log('✅ Deleted files loaded:', this.currentFiles.length);
                 return;
             }
 
@@ -873,7 +950,7 @@ class FileManager {
                 const response = await Utils.apiRequest(`${CONFIG.API_ENDPOINTS.files.list}?path=${encodeURIComponent(path)}`);
                 if (response && response.files) {
                     this.currentFiles = response.files;
-                    console.log('Loaded files from API:', this.currentFiles.length);
+                    console.log('✅ Files loaded from API:', this.currentFiles.length);
                 }
             } catch (error) {
                 console.warn('API load failed, using local storage:', error);
@@ -881,7 +958,7 @@ class FileManager {
             
             // Always load and merge local files
             const localFiles = this.getStoredFilesForPath(path);
-            console.log('Loading local files for path:', path, 'found:', localFiles.length);
+            console.log('📁 Loading local files for path:', path, 'found:', localFiles.length);
             
             // Merge API files with local files (remove duplicates by name)
             const existingFileNames = new Set(this.currentFiles.map(f => f.name));
@@ -899,21 +976,51 @@ class FileManager {
                 return a.name.localeCompare(b.name);
             });
             
-            console.log('Total files loaded:', this.currentFiles.length);
+            console.log('✅ Total files loaded:', this.currentFiles.length, 'for path:', path);
             
             this.renderFiles();
             this.updateBreadcrumb();
             
         } catch (error) {
-            console.error('Failed to load files:', error);
-            Utils.showNotification('파일을 불러오는데 실패했습니다.', 'error');
+            console.error('❌ Failed to load files:', error);
+            
+            // Show error state instead of empty state
+            this.showErrorState('파일을 불러오는데 실패했습니다.');
             
             // Fallback to local files only
-            this.currentFiles = this.getStoredFilesForPath(path);
-            this.renderFiles();
-            this.updateBreadcrumb();
+            try {
+                this.currentFiles = this.getStoredFilesForPath(path);
+                console.log('📁 Fallback to local files:', this.currentFiles.length);
+                this.renderFiles();
+                this.updateBreadcrumb();
+            } catch (fallbackError) {
+                console.error('❌ Fallback also failed:', fallbackError);
+            }
         } finally {
-            Utils.showLoading(false);
+            if (!isInitialLoad) {
+                Utils.showLoading(false);
+            }
+        }
+    }
+
+    // Show error state for loading failures
+    showErrorState(message) {
+        const fileList = document.getElementById('fileList');
+        if (fileList) {
+            fileList.innerHTML = `
+                <div class="error-state">
+                    <div class="error-icon">
+                        <i class="fas fa-exclamation-triangle"></i>
+                    </div>
+                    <div class="error-text">
+                        <h3>로딩 실패</h3>
+                        <p>${message}</p>
+                        <button onclick="window.fileManager.loadFiles()" class="retry-btn">
+                            <i class="fas fa-redo"></i> 다시 시도
+                        </button>
+                    </div>
+                </div>
+            `;
         }
     }
 
@@ -1975,10 +2082,16 @@ ${file.name},"${Utils.formatFileSize(file.size || 1024)}","${file.created || new
     generateLocalShareUrl(file, shareType, permissions, expiry) {
         const shareId = this.generateShareToken();
         
-        // Create INDEPENDENT share URL that points to share.html
-        const shareUrl = `${window.location.origin}/share.html?share=${shareId}`;
+        // Create CORRECT share URL that points to share.html with proper path
+        const currentPath = window.location.pathname;
+        const basePath = currentPath.includes('/client/') ? 
+            currentPath.substring(0, currentPath.indexOf('/client/')) + '/client' :
+            (currentPath.includes('/') ? currentPath.substring(0, currentPath.lastIndexOf('/')) : '');
         
-        console.log('🔗 Creating INDEPENDENT share URL:', shareUrl, 'for file:', file.name);
+        const shareUrl = `${window.location.origin}${basePath}/share.html?share=${shareId}`;
+        
+        console.log('🔗 Creating CORRECTED share URL:', shareUrl, 'for file:', file.name);
+        console.log('🔗 Current path:', currentPath, 'Base path:', basePath);
         
         // Store complete share information with enhanced data
         const shareData = {
@@ -2008,8 +2121,10 @@ ${file.name},"${Utils.formatFileSize(file.size || 1024)}","${file.created || new
                 thumbnail: file.thumbnail,
                 isShared: true,
                 shareId: shareId,
-                // Store file content for independent access
-                content: this.createFileContent(file)
+                // Store ACTUAL file content for independent access
+                content: this.createFileContent(file),
+                // Store file as blob data for real download capability
+                fileBlob: file.fileBlob || null
             }
         };
         
@@ -2029,11 +2144,11 @@ ${file.name},"${Utils.formatFileSize(file.size || 1024)}","${file.created || new
         };
         localStorage.setItem('file_shares', JSON.stringify(fileShares));
         
-        console.log('✅ INDEPENDENT share created successfully:', {
+        console.log('✅ CORRECTED share created successfully:', {
             shareId: shareId,
             fileName: file.name,
             shareUrl: shareUrl,
-            pageType: 'INDEPENDENT'
+            pageType: 'INDEPENDENT_FIXED'
         });
         
         return shareUrl;
@@ -2129,11 +2244,11 @@ ${file.name},"${Utils.formatFileSize(file.size || 1024)}","${file.created || new
             return;
         }
         
-        console.log('🧪 Testing INDEPENDENT share link:', shareLink.value);
+        console.log('🧪 Testing CORRECTED share link:', shareLink.value);
         
-        // Validate that this is an independent share link
-        if (!shareLink.value.includes('/share.html')) {
-            Utils.showNotification('❌ 독립적인 공유 링크가 아닙니다. 다시 생성해주세요.', 'error');
+        // Validate that this is a valid share link
+        if (!shareLink.value.includes('share.html')) {
+            Utils.showNotification('❌ 유효한 공유 링크가 아닙니다. 다시 생성해주세요.', 'error');
             return;
         }
         
@@ -2163,20 +2278,20 @@ ${file.name},"${Utils.formatFileSize(file.size || 1024)}","${file.created || new
                 throw new Error('공유 데이터가 불완전합니다.');
             }
             
-            console.log('✅ INDEPENDENT share link validation successful:', {
+            console.log('✅ CORRECTED share link validation successful:', {
                 shareId: shareId,
                 fileName: parsedData.fileName,
                 url: shareLink.value,
-                isIndependent: true
+                isValid: true
             });
             
             // Open share link in new tab
             window.open(shareLink.value, '_blank');
-            Utils.showNotification('✅ 독립적인 공유 페이지가 새 탭에서 열렸습니다.', 'success');
+            Utils.showNotification('✅ 공유 링크가 새 탭에서 열렸습니다.');
             
         } catch (error) {
             console.error('❌ Share validation failed:', error);
-            Utils.showNotification('❌ 공유 링크 검증에 실패했습니다.', 'error');
+            Utils.showNotification('❌ 공유 데이터 검증에 실패했습니다.', 'error');
         }
     }
 
@@ -2715,37 +2830,84 @@ ${file.name},"${Utils.formatFileSize(file.size || 1024)}","${file.created || new
         }
     }
 
-    // Render empty state
+    // Render empty state only when actually empty (not during loading)
     renderEmptyState() {
         const fileList = document.getElementById('fileList');
         if (!fileList) return;
 
+        // Don't show empty state if we're still in initial loading
+        if (fileList.innerHTML.includes('initial-loading-state') || 
+            fileList.innerHTML.includes('auth-required-state') ||
+            fileList.innerHTML.includes('error-state')) {
+            console.log('⏭️ Skipping empty state - still in loading/auth/error state');
+            return;
+        }
+
+        // Double-check authentication before showing empty state
+        if (!window.authManager || !window.authManager.isAuthenticated()) {
+            console.log('🔒 User not authenticated, showing auth required state');
+            this.showNotAuthenticatedState();
+            return;
+        }
+
         let message = '파일이 없습니다.';
         let icon = 'fas fa-folder-open';
+        let description = '이 폴더는 비어있습니다.';
 
         switch (this.currentSection) {
             case CONFIG.FILE_SECTIONS.SHARED:
                 message = '공유된 파일이 없습니다.';
                 icon = 'fas fa-share-alt';
+                description = '아직 공유한 파일이 없습니다. 파일을 공유해보세요.';
                 break;
             case CONFIG.FILE_SECTIONS.RECENT:
                 message = '최근 파일이 없습니다.';
                 icon = 'fas fa-clock';
+                description = '최근에 접근한 파일이 없습니다.';
                 break;
             case CONFIG.FILE_SECTIONS.IMPORTANT:
                 message = '중요 파일이 없습니다.';
                 icon = 'fas fa-star';
+                description = '중요로 표시한 파일이 없습니다.';
                 break;
             case CONFIG.FILE_SECTIONS.DELETED:
                 message = '삭제된 파일이 없습니다.';
                 icon = 'fas fa-trash';
+                description = '휴지통이 비어있습니다.';
+                break;
+            case CONFIG.FILE_SECTIONS.FILES:
+            default:
+                if (this.currentPath === '/') {
+                    message = '파일을 업로드해보세요';
+                    description = '첫 번째 파일을 업로드하거나 폴더를 만들어보세요.';
+                } else {
+                    message = '이 폴더는 비어있습니다';
+                    description = `${this.currentPath} 폴더에 파일이 없습니다.`;
+                }
                 break;
         }
 
+        console.log('📭 Showing empty state for section:', this.currentSection, 'path:', this.currentPath);
+
         fileList.innerHTML = `
             <div class="empty-state">
-                <i class="${icon}"></i>
-                <p>${message}</p>
+                <div class="empty-icon">
+                    <i class="${icon}"></i>
+                </div>
+                <div class="empty-text">
+                    <h3>${message}</h3>
+                    <p>${description}</p>
+                </div>
+                ${this.currentSection === CONFIG.FILE_SECTIONS.FILES ? `
+                    <div class="empty-actions">
+                        <button onclick="document.getElementById('fileInput').click()" class="action-btn">
+                            <i class="fas fa-upload"></i> 파일 업로드
+                        </button>
+                        <button onclick="window.fileManager.showCreateFolderDialog()" class="action-btn secondary">
+                            <i class="fas fa-folder-plus"></i> 폴더 만들기
+                        </button>
+                    </div>
+                ` : ''}
             </div>
         `;
     }

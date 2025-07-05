@@ -1647,4 +1647,176 @@ body.logged-out .auth-modal {
     font-size: 8px;
     padding: 1px 2px;
     z-index: 10;
+}
+
+/* Enhanced loading and state styles */
+.initial-loading-state,
+.auth-required-state,
+.error-state,
+.empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 300px;
+    padding: 40px;
+    text-align: center;
+    color: #666;
+}
+
+.initial-loading-state .loading-icon,
+.auth-required-state .auth-icon,
+.error-state .error-icon,
+.empty-state .empty-icon {
+    font-size: 64px;
+    margin-bottom: 20px;
+    opacity: 0.8;
+}
+
+.initial-loading-state .loading-icon {
+    color: #0061ff;
+}
+
+.auth-required-state .auth-icon {
+    color: #ffc107;
+}
+
+.error-state .error-icon {
+    color: #dc3545;
+}
+
+.empty-state .empty-icon {
+    color: #9ca3af;
+}
+
+.initial-loading-state .loading-text h3,
+.auth-required-state .auth-text h3,
+.error-state .error-text h3,
+.empty-state .empty-text h3 {
+    font-size: 24px;
+    font-weight: 600;
+    margin-bottom: 10px;
+    color: #374151;
+}
+
+.initial-loading-state .loading-text p,
+.auth-required-state .auth-text p,
+.error-state .error-text p,
+.empty-state .empty-text p {
+    font-size: 16px;
+    margin-bottom: 20px;
+    line-height: 1.5;
+    opacity: 0.8;
+}
+
+.error-state .retry-btn {
+    background: #0061ff;
+    color: white;
+    border: none;
+    padding: 12px 24px;
+    border-radius: 25px;
+    font-size: 16px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 10px;
+}
+
+.error-state .retry-btn:hover {
+    background: #0052cc;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 12px rgba(0, 97, 255, 0.3);
+}
+
+.empty-state .empty-actions {
+    display: flex;
+    gap: 15px;
+    margin-top: 20px;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+.empty-state .action-btn {
+    background: #0061ff;
+    color: white;
+    border: none;
+    padding: 12px 24px;
+    border-radius: 25px;
+    font-size: 16px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    text-decoration: none;
+}
+
+.empty-state .action-btn:hover {
+    background: #0052cc;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 12px rgba(0, 97, 255, 0.3);
+}
+
+.empty-state .action-btn.secondary {
+    background: #6c757d;
+}
+
+.empty-state .action-btn.secondary:hover {
+    background: #5a6268;
+    box-shadow: 0 6px 12px rgba(108, 117, 125, 0.3);
+}
+
+/* Spinner animation for loading states */
+.fa-spinner {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* Responsive adjustments for loading states */
+@media (max-width: 768px) {
+    .initial-loading-state,
+    .auth-required-state,
+    .error-state,
+    .empty-state {
+        min-height: 250px;
+        padding: 30px 20px;
+    }
+    
+    .initial-loading-state .loading-icon,
+    .auth-required-state .auth-icon,
+    .error-state .error-icon,
+    .empty-state .empty-icon {
+        font-size: 48px;
+        margin-bottom: 15px;
+    }
+    
+    .initial-loading-state .loading-text h3,
+    .auth-required-state .auth-text h3,
+    .error-state .error-text h3,
+    .empty-state .empty-text h3 {
+        font-size: 20px;
+    }
+    
+    .initial-loading-state .loading-text p,
+    .auth-required-state .auth-text p,
+    .error-state .error-text p,
+    .empty-state .empty-text p {
+        font-size: 14px;
+    }
+    
+    .empty-state .empty-actions {
+        flex-direction: column;
+        align-items: center;
+    }
+    
+    .empty-state .action-btn {
+        width: 100%;
+        max-width: 200px;
+    }
 } 
