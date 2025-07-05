@@ -312,29 +312,40 @@ class UploadManager {
     async uploadFileSimple(task) {
         const { file } = task;
         
-        // Get current path more reliably with fallbacks
+        // 🔥 Firebase 스타일: 간단하고 명확한 경로 결정
         let currentPath = '/';
         
-        // Try multiple methods to get current path
-        if (window.fileManager) {
+        // 1순위: 명시적으로 제공된 경로 사용
+        if (providedPath && typeof providedPath === 'string' && providedPath.trim() !== '') {
+            currentPath = providedPath;
+            console.log('  ✅ Using provided path:', currentPath);
+        }
+        // 2순위: fileManager의 현재 경로
+        else if (window.fileManager && window.fileManager.getCurrentPath) {
             currentPath = window.fileManager.getCurrentPath();
-            if (!currentPath || currentPath === '') {
-                currentPath = window.fileManager.currentPath || '/';
-            }
+            console.log('  ✅ Using fileManager path:', currentPath);
+        }
+        // 3순위: fileManager의 currentPath 속성
+        else if (window.fileManager && window.fileManager.currentPath) {
+            currentPath = window.fileManager.currentPath;
+            console.log('  ✅ Using fileManager.currentPath:', currentPath);
         }
         
-        // Validate path
-        if (!currentPath.startsWith('/')) {
-            currentPath = '/' + currentPath;
-        }
+        // 🔥 Firebase 스타일: 폴더경로 + 파일명 = 완전한 경로
+        const fullFilePath = currentPath === '/' ? 
+            `/${file.name}` : 
+            `${currentPath}/${file.name}`;
         
-        console.log('Uploading file:', file.name, 'to path:', currentPath);
+        console.log('🔥 FIREBASE STYLE - Full file path:', fullFilePath);
+        console.log('  📁 Folder:', currentPath);
+        console.log('  📄 File:', file.name);
         
         // Try API first, then fallback to local storage
         try {
             const formData = new FormData();
             formData.append('file', file);
             formData.append('path', currentPath);
+            formData.append('fullPath', fullFilePath);
             
             // Create XMLHttpRequest for progress tracking
             const response = await new Promise((resolve, reject) => {
@@ -376,14 +387,23 @@ class UploadManager {
                 xhr.send(formData);
             });
             
-            console.log('Upload successful via API for', file.name);
+            console.log('✅ Upload successful via API for', file.name);
+            
+            // 🔥 업로드 성공 후 파일매니저 새로고침
+            this.refreshFileManagerAfterUpload(currentPath);
+            
             return response;
             
         } catch (error) {
             console.warn('API upload failed, using local storage:', error);
             
             // Fallback to local storage
-            return await this.uploadFileLocal(file, currentPath, task);
+            const result = await this.uploadFileLocal(file, currentPath, task);
+            
+            // 🔥 로컬 업로드 성공 후에도 파일매니저 새로고침
+            this.refreshFileManagerAfterUpload(currentPath);
+            
+            return result;
         }
     }
 
@@ -401,66 +421,67 @@ class UploadManager {
                     await new Promise(resolve => setTimeout(resolve, 100));
                 }
                 
-                // Get current path MORE reliably with multiple fallbacks
-                let uploadPath = this.determineUploadPath(currentPath);
-                console.log('🔥 FINAL upload path determined:', uploadPath);
+                // 🔥 Firebase 스타일: 명확한 경로 확정
+                const uploadPath = this.normalizePath(currentPath || '/');
+                console.log('🔥 FIREBASE STYLE LOCAL - Upload path:', uploadPath);
+                console.log('  📁 Target folder:', uploadPath);
+                console.log('  📄 File name:', file.name);
                 
-                // Create file data with correct path
+                // Create file data with EXACT path like Firebase
                 const fileData = {
                     id: Utils.generateId(),
                     name: file.name,
                     size: file.size,
                     type: file.type === 'application/x-msdos-program' ? 'file' : (file.type.startsWith('image/') ? 'image' : file.type.startsWith('video/') ? 'video' : 'file'),
                     mimeType: file.type || 'application/octet-stream',
-                    path: uploadPath,
+                    path: uploadPath,  // 🔥 정확한 폴더 경로
                     created: new Date().toISOString(),
                     modified: new Date().toISOString(),
                     isLocal: true,
                     uploadedBy: window.authManager?.getCurrentUser()?.email || 'demo-user'
                 };
                 
-                console.log('📁 File data created:', {
-                    name: fileData.name,
-                    path: fileData.path,
-                    size: fileData.size
+                console.log('🔥 FIREBASE STYLE - File will be stored in:', {
+                    fileName: fileData.name,
+                    folderPath: fileData.path,
+                    fullPath: uploadPath === '/' ? `/${file.name}` : `${uploadPath}/${file.name}`
                 });
                 
                 // Generate thumbnail if supported
                 if (Utils.isThumbnailSupported(file.name)) {
                     try {
-                        console.log('🖼️ Attempting to generate thumbnail for:', file.name);
+                        console.log('🖼️ Generating thumbnail for:', file.name);
                         
                         if (window.fileManager && typeof window.fileManager.generateRealThumbnail === 'function') {
                             const thumbnailData = await window.fileManager.generateRealThumbnail(fileData, file);
                             if (thumbnailData) {
                                 fileData.thumbnail = thumbnailData;
-                                console.log('✅ Thumbnail generated and stored for:', file.name);
-                            } else {
-                                console.log('⚠️ No thumbnail data returned for:', file.name);
+                                console.log('✅ Thumbnail generated for:', file.name);
                             }
-                        } else {
-                            console.warn('⚠️ FileManager or generateRealThumbnail method not available');
                         }
                     } catch (thumbnailError) {
-                        console.error('❌ Failed to generate thumbnail for', file.name, ':', thumbnailError);
-                        // Continue without thumbnail - not a critical error
+                        console.error('❌ Thumbnail generation failed:', thumbnailError);
+                        // Continue without thumbnail
                     }
-                } else {
-                    console.log('❌ Thumbnail not supported for file type:', file.name);
                 }
                 
-                // Store file in local storage
+                // 🔥 Firebase 스타일: 저장소에 파일 저장
                 const storedFiles = JSON.parse(localStorage.getItem('stored_files') || '[]');
                 storedFiles.push(fileData);
                 localStorage.setItem('stored_files', JSON.stringify(storedFiles));
                 
-                console.log('✅ File uploaded successfully:', fileData.name, 'in path:', uploadPath);
-                console.log('📊 Total stored files:', storedFiles.length);
+                console.log('✅ FIREBASE STYLE SUCCESS - File stored:');
+                console.log('  📄 Name:', fileData.name);
+                console.log('  📁 Path:', fileData.path);
+                console.log('  📊 Total files:', storedFiles.length);
+                
+                // Success notification
+                Utils.showNotification(`📁 ${file.name}이(가) ${uploadPath} 폴더에 업로드되었습니다.`, 'success');
                 
                 resolve({
                     success: true,
                     file: fileData,
-                    message: 'File uploaded successfully (local storage)'
+                    message: `File uploaded to ${uploadPath} successfully (local storage)`
                 });
                 
             } catch (error) {
@@ -472,47 +493,31 @@ class UploadManager {
 
     // Determine upload path with multiple fallbacks
     determineUploadPath(providedPath) {
-        console.log('🔍 Determining upload path...');
+        console.log('🔥 FIREBASE STYLE - Determining upload path...');
         console.log('  📥 Provided path:', providedPath);
         
         let finalPath = '/';
         
-        // Method 1: Use provided path if valid
+        // 1순위: 명시적으로 제공된 경로 사용
         if (providedPath && typeof providedPath === 'string' && providedPath.trim() !== '') {
             finalPath = providedPath;
             console.log('  ✅ Using provided path:', finalPath);
         }
-        
-        // Method 2: Get from fileManager current path
-        else if (window.fileManager) {
-            if (window.fileManager.currentPath) {
-                finalPath = window.fileManager.currentPath;
-                console.log('  ✅ Using fileManager.currentPath:', finalPath);
-            }
-            else if (typeof window.fileManager.getCurrentPath === 'function') {
-                finalPath = window.fileManager.getCurrentPath();
-                console.log('  ✅ Using fileManager.getCurrentPath():', finalPath);
-            }
+        // 2순위: fileManager의 현재 경로
+        else if (window.fileManager && window.fileManager.getCurrentPath) {
+            finalPath = window.fileManager.getCurrentPath();
+            console.log('  ✅ Using fileManager path:', finalPath);
+        }
+        // 3순위: fileManager의 currentPath 속성
+        else if (window.fileManager && window.fileManager.currentPath) {
+            finalPath = window.fileManager.currentPath;
+            console.log('  ✅ Using fileManager.currentPath:', finalPath);
         }
         
-        // Method 3: Parse from URL
-        else {
-            try {
-                const urlParams = new URLSearchParams(window.location.search);
-                const pathFromUrl = urlParams.get('path');
-                if (pathFromUrl) {
-                    finalPath = decodeURIComponent(pathFromUrl);
-                    console.log('  ✅ Using URL path parameter:', finalPath);
-                }
-            } catch (error) {
-                console.log('  ⚠️ URL parsing failed:', error);
-            }
-        }
-        
-        // Normalize and validate path
+        // 경로 정규화 (Firebase 스타일)
         finalPath = this.normalizePath(finalPath);
-        console.log('  🎯 Final normalized path:', finalPath);
         
+        console.log('  🎯 FIREBASE STYLE - Final path:', finalPath);
         return finalPath;
     }
 
@@ -872,6 +877,14 @@ class UploadManager {
             'POST',
             { uploadId: uploadId }
         );
+    }
+
+    // 🔥 업로드 성공 후 파일매니저 새로고침
+    refreshFileManagerAfterUpload(currentPath) {
+        if (window.fileManager) {
+            window.fileManager.loadFiles();
+            window.fileManager.loadStorageInfo();
+        }
     }
 }
 
