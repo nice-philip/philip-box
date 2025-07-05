@@ -58,10 +58,18 @@ class FileManager {
     setupUrlNavigation() {
         // Listen for browser back/forward button
         window.addEventListener('popstate', (event) => {
+            console.log('🔄 Popstate event triggered:', event.state);
+            
             if (event.state && event.state.path) {
-                this.navigateToFolder(event.state.path, false); // false = don't update URL again
+                console.log('🚀 Navigating to path from history:', event.state.path);
+                
+                // Navigate without updating URL (to prevent history loop)
+                this.navigateToFolder(event.state.path, false);
             } else {
-                this.loadFolderFromUrl();
+                console.log('🏠 No state found, navigating to root');
+                
+                // Navigate to root if no state
+                this.navigateToFolder('/', false);
             }
         });
     }
@@ -86,43 +94,73 @@ class FileManager {
             this.switchSection(sectionParam, false); // false = don't update URL
         }
         
-        // Handle path parameter
-        if (pathParam) {
-            const decodedPath = decodeURIComponent(pathParam);
-            console.log('Loading folder from URL:', decodedPath);
-            this.navigateToFolder(decodedPath, false); // false = don't update URL again
-        } else if (this.currentSection === CONFIG.FILE_SECTIONS.FILES) {
-            // Default to root for files section
+        // Enhanced URL parameter loading
+        const currentUrlParams = new URLSearchParams(window.location.search);
+        const currentPathParam = currentUrlParams.get('path');
+        
+        console.log('🔗 URL parameters check - path:', currentPathParam);
+        
+        if (currentPathParam) {
+            console.log('🚀 Loading folder from URL parameter:', currentPathParam);
+            
+            // Decode path parameter
+            const decodedPath = decodeURIComponent(currentPathParam);
+            
+            // Navigate to the path from URL (without updating URL again)
+            this.navigateToFolder(decodedPath, false);
+        } else {
+            console.log('🏠 No path parameter, navigating to root');
+            
+            // Navigate to root if no path parameter
             this.navigateToFolder('/', false);
         }
     }
 
-    // Update URL with current state
+    // Update URL to reflect current path and section  
     updateUrl() {
-        const urlParams = new URLSearchParams();
-        
-        // Add section if not default
-        if (this.currentSection !== CONFIG.FILE_SECTIONS.FILES) {
-            urlParams.set('section', this.currentSection);
+        try {
+            console.log('🔗 Updating URL - currentPath:', this.currentPath, 'currentSection:', this.currentSection);
+            
+            const params = new URLSearchParams();
+            
+            // Add path parameter if not root
+            if (this.currentPath && this.currentPath !== '/') {
+                params.set('path', this.currentPath);
+            }
+            
+            // Add section parameter if not default
+            if (this.currentSection && this.currentSection !== 'files') {
+                params.set('section', this.currentSection);
+            }
+            
+            // Construct new URL
+            const baseUrl = window.location.origin + window.location.pathname;
+            const queryString = params.toString();
+            const newUrl = queryString ? `${baseUrl}?${queryString}` : baseUrl;
+            
+            // Create state object for browser history
+            const stateObj = {
+                path: this.currentPath,
+                section: this.currentSection,
+                timestamp: Date.now()
+            };
+            
+            // Only update if URL actually changed
+            if (newUrl !== window.location.href) {
+                console.log('✅ URL updating from:', window.location.href, 'to:', newUrl);
+                window.history.pushState(stateObj, '', newUrl);
+                
+                // Dispatch custom event for URL change
+                window.dispatchEvent(new CustomEvent('urlChanged', {
+                    detail: { path: this.currentPath, section: this.currentSection }
+                }));
+            } else {
+                console.log('📝 URL already matches current state');
+            }
+            
+        } catch (error) {
+            console.error('❌ Failed to update URL:', error);
         }
-        
-        // Add path if not root and in files section
-        if (this.currentSection === CONFIG.FILE_SECTIONS.FILES && this.currentPath !== '/') {
-            urlParams.set('path', encodeURIComponent(this.currentPath));
-        }
-        
-        // Build new URL
-        const newUrl = window.location.pathname + (urlParams.toString() ? '?' + urlParams.toString() : '');
-        
-        // Update browser history
-        const stateObj = {
-            section: this.currentSection,
-            path: this.currentPath
-        };
-        
-        window.history.pushState(stateObj, '', newUrl);
-        
-        console.log('URL updated to:', newUrl, 'State:', stateObj);
     }
 
     // Check for shared file in URL parameters
@@ -240,7 +278,7 @@ class FileManager {
         }
     }
 
-    // Enhanced test share link
+    // Enhanced test share link with better validation
     testShareLink() {
         const shareModal = document.getElementById('shareModal');
         const shareLink = document.getElementById('shareLink');
@@ -250,14 +288,18 @@ class FileManager {
             return;
         }
         
-        console.log('🧪 Testing share link:', shareLink.value);
+        console.log('🧪 Testing INDEPENDENT share link:', shareLink.value);
         
-        // Extract share ID from URL (both # and ? formats)
+        // Validate that this is an independent share link
+        if (!shareLink.value.includes('/share.html')) {
+            Utils.showNotification('❌ 독립적인 공유 링크가 아닙니다. 다시 생성해주세요.', 'error');
+            return;
+        }
+        
+        // Extract share ID from URL
         let shareId = null;
         
-        if (shareLink.value.includes('#share=')) {
-            shareId = shareLink.value.split('#share=')[1];
-        } else if (shareLink.value.includes('?share=')) {
+        if (shareLink.value.includes('?share=')) {
             shareId = shareLink.value.split('?share=')[1].split('&')[0];
         }
         
@@ -280,11 +322,16 @@ class FileManager {
                 throw new Error('공유 데이터가 불완전합니다.');
             }
             
-            console.log('✅ Share link validation successful');
+            console.log('✅ INDEPENDENT share link validation successful:', {
+                shareId: shareId,
+                fileName: parsedData.fileName,
+                url: shareLink.value,
+                isIndependent: true
+            });
             
             // Open share link in new tab
             window.open(shareLink.value, '_blank');
-            Utils.showNotification('✅ 공유 링크가 새 탭에서 열렸습니다.', 'success');
+            Utils.showNotification('✅ 독립적인 공유 페이지가 새 탭에서 열렸습니다.', 'success');
             
         } catch (error) {
             console.error('❌ Share validation failed:', error);
@@ -1396,25 +1443,27 @@ class FileManager {
         }
     }
 
-    // Handle file double click
+    // Handle file double click with enhanced navigation
     handleFileDoubleClick(file) {
+        console.log('🖱️ File double clicked:', file.name, 'type:', file.type);
+        
         if (file.type === 'folder') {
-            // Generate correct folder path
-            let folderPath;
-            if (file.path) {
-                // If file has explicit path, use it
-                folderPath = file.path;
-            } else {
-                // Generate path from current path + folder name
-                folderPath = this.currentPath === '/' ? 
-                    `/${file.name}` : 
-                    `${this.currentPath}/${file.name}`;
-            }
+            console.log('📁 Opening folder:', file.name);
             
-            console.log('Double-clicking folder:', file.name, 'Navigating to:', folderPath);
-            this.navigateToFolder(folderPath);
+            // Construct folder path
+            const folderPath = this.currentPath === '/' ? 
+                '/' + file.name : 
+                this.currentPath + '/' + file.name;
+            
+            console.log('🚀 Navigating to folder path:', folderPath);
+            
+            // Navigate to folder with URL update
+            this.navigateToFolder(folderPath, true);
         } else {
-            this.openFile(file);
+            console.log('📄 Opening file preview for:', file.name);
+            
+            // Open file preview
+            this.openFilePreview(file);
         }
     }
 
@@ -1458,46 +1507,44 @@ class FileManager {
         });
     }
 
-    // Navigate to folder
+    // Navigate to folder with enhanced URL updating
     async navigateToFolder(path, updateUrl = true) {
         try {
-            // Normalize path
+            console.log('🚀 Navigating to folder:', path, 'updateUrl:', updateUrl);
+            
+            // Validate path
             if (!path || typeof path !== 'string') {
-                path = '/';
+                console.error('❌ Invalid path provided:', path);
+                return;
             }
             
-            if (!path.startsWith('/')) {
-                path = '/' + path;
-            }
+            // Normalize path
+            const normalizedPath = path.startsWith('/') ? path : '/' + path;
             
-            // Remove double slashes
-            path = path.replace(/\/+/g, '/');
-            
-            console.log('Navigating to folder:', path);
-            
-            // Update current path before loading files
-            this.currentPath = path;
+            // Update current path
+            this.currentPath = normalizedPath;
+            console.log('✅ Current path updated to:', this.currentPath);
             
             // Update URL if requested
             if (updateUrl) {
+                console.log('🔗 Updating URL for navigation...');
                 this.updateUrl();
             }
+            
+            // Update breadcrumb
+            this.updateBreadcrumb();
             
             // Load files for the new path
-            await this.loadFiles(path);
+            await this.loadFiles(normalizedPath);
             
-            console.log('Navigation completed, current path is now:', this.currentPath);
+            // Update UI
+            this.renderFiles();
+            
+            console.log('✅ Navigation to folder completed:', normalizedPath);
             
         } catch (error) {
-            console.error('Navigation failed:', error);
-            Utils.showNotification('폴더 탐색에 실패했습니다.', 'error');
-            
-            // Reset to root on error
-            this.currentPath = '/';
-            if (updateUrl) {
-                this.updateUrl();
-            }
-            await this.loadFiles('/');
+            console.error('❌ Navigation failed:', error);
+            Utils.showNotification('폴더 이동에 실패했습니다.', 'error');
         }
     }
 
@@ -1924,13 +1971,14 @@ ${file.name},"${Utils.formatFileSize(file.size || 1024)}","${file.created || new
         }
     }
 
-    // Generate local share URL with complete file information
+    // Generate local share URL with independent share page
     generateLocalShareUrl(file, shareType, permissions, expiry) {
         const shareId = this.generateShareToken();
-        // Create proper share URL that points to individual file
-        const shareUrl = `${window.location.origin}${window.location.pathname}#share=${shareId}`;
         
-        console.log('🔗 Creating share URL:', shareUrl, 'for file:', file.name);
+        // Create INDEPENDENT share URL that points to share.html
+        const shareUrl = `${window.location.origin}/share.html?share=${shareId}`;
+        
+        console.log('🔗 Creating INDEPENDENT share URL:', shareUrl, 'for file:', file.name);
         
         // Store complete share information with enhanced data
         const shareData = {
@@ -1947,7 +1995,7 @@ ${file.name},"${Utils.formatFileSize(file.size || 1024)}","${file.created || new
             createdBy: window.authManager?.getCurrentUser()?.email || 'demo-user',
             accessCount: 0,
             lastAccessed: null,
-            // Store complete file data for sharing
+            // Store complete file data for independent sharing
             fileData: {
                 id: file.id,
                 name: file.name,
@@ -1959,7 +2007,9 @@ ${file.name},"${Utils.formatFileSize(file.size || 1024)}","${file.created || new
                 modified: file.modified,
                 thumbnail: file.thumbnail,
                 isShared: true,
-                shareId: shareId
+                shareId: shareId,
+                // Store file content for independent access
+                content: this.createFileContent(file)
             }
         };
         
@@ -1979,10 +2029,11 @@ ${file.name},"${Utils.formatFileSize(file.size || 1024)}","${file.created || new
         };
         localStorage.setItem('file_shares', JSON.stringify(fileShares));
         
-        console.log('✅ Share created successfully:', {
+        console.log('✅ INDEPENDENT share created successfully:', {
             shareId: shareId,
             fileName: file.name,
-            shareUrl: shareUrl
+            shareUrl: shareUrl,
+            pageType: 'INDEPENDENT'
         });
         
         return shareUrl;
@@ -2078,14 +2129,18 @@ ${file.name},"${Utils.formatFileSize(file.size || 1024)}","${file.created || new
             return;
         }
         
-        console.log('🧪 Testing share link:', shareLink.value);
+        console.log('🧪 Testing INDEPENDENT share link:', shareLink.value);
         
-        // Extract share ID from URL (both # and ? formats)
+        // Validate that this is an independent share link
+        if (!shareLink.value.includes('/share.html')) {
+            Utils.showNotification('❌ 독립적인 공유 링크가 아닙니다. 다시 생성해주세요.', 'error');
+            return;
+        }
+        
+        // Extract share ID from URL
         let shareId = null;
         
-        if (shareLink.value.includes('#share=')) {
-            shareId = shareLink.value.split('#share=')[1];
-        } else if (shareLink.value.includes('?share=')) {
+        if (shareLink.value.includes('?share=')) {
             shareId = shareLink.value.split('?share=')[1].split('&')[0];
         }
         
@@ -2108,11 +2163,16 @@ ${file.name},"${Utils.formatFileSize(file.size || 1024)}","${file.created || new
                 throw new Error('공유 데이터가 불완전합니다.');
             }
             
-            console.log('✅ Share link validation successful');
+            console.log('✅ INDEPENDENT share link validation successful:', {
+                shareId: shareId,
+                fileName: parsedData.fileName,
+                url: shareLink.value,
+                isIndependent: true
+            });
             
             // Open share link in new tab
             window.open(shareLink.value, '_blank');
-            Utils.showNotification('✅ 공유 링크가 새 탭에서 열렸습니다.', 'success');
+            Utils.showNotification('✅ 독립적인 공유 페이지가 새 탭에서 열렸습니다.', 'success');
             
         } catch (error) {
             console.error('❌ Share validation failed:', error);
@@ -2626,7 +2686,12 @@ ${file.name},"${Utils.formatFileSize(file.size || 1024)}","${file.created || new
         breadcrumbNav.querySelectorAll('a').forEach(link => {
             link.addEventListener('click', (e) => {
                 e.preventDefault();
-                this.navigateToFolder(link.dataset.path);
+                const path = link.dataset.path;
+                
+                console.log('🍞 Breadcrumb clicked, navigating to:', path);
+                
+                // Navigate to the clicked path with URL update
+                this.navigateToFolder(path, true);
             });
         });
     }
