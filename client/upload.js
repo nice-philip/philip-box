@@ -315,20 +315,26 @@ class UploadManager {
         // 🔥 Firebase 스타일: 간단하고 명확한 경로 결정
         let currentPath = '/';
         
-        // 1순위: 명시적으로 제공된 경로 사용
-        if (providedPath && typeof providedPath === 'string' && providedPath.trim() !== '') {
-            currentPath = providedPath;
-            console.log('  ✅ Using provided path:', currentPath);
-        }
-        // 2순위: fileManager의 현재 경로
-        else if (window.fileManager && window.fileManager.getCurrentPath) {
+        // 1순위: fileManager의 현재 경로 (가장 정확한 경로)
+        if (window.fileManager && window.fileManager.getCurrentPath) {
             currentPath = window.fileManager.getCurrentPath();
-            console.log('  ✅ Using fileManager path:', currentPath);
+            console.log('  ✅ Using fileManager getCurrentPath:', currentPath);
         }
-        // 3순위: fileManager의 currentPath 속성
+        // 2순위: fileManager의 currentPath 속성
         else if (window.fileManager && window.fileManager.currentPath) {
             currentPath = window.fileManager.currentPath;
             console.log('  ✅ Using fileManager.currentPath:', currentPath);
+        }
+        // 3순위: URL에서 경로 파라미터 추출
+        else {
+            const urlParams = new URLSearchParams(window.location.search);
+            const pathParam = urlParams.get('path');
+            if (pathParam) {
+                currentPath = decodeURIComponent(pathParam);
+                console.log('  ✅ Using URL path parameter:', currentPath);
+            } else {
+                console.log('  ⚠️ Using default root path:', currentPath);
+            }
         }
         
         // 🔥 Firebase 스타일: 폴더경로 + 파일명 = 완전한 경로
@@ -337,8 +343,9 @@ class UploadManager {
             `${currentPath}/${file.name}`;
         
         console.log('🔥 FIREBASE STYLE - Full file path:', fullFilePath);
-        console.log('  📁 Folder:', currentPath);
-        console.log('  📄 File:', file.name);
+        console.log('  📁 Current folder:', currentPath);
+        console.log('  📄 File name:', file.name);
+        console.log('  🎯 Target path for upload:', fullFilePath);
         
         // Try API first, then fallback to local storage
         try {
@@ -389,7 +396,7 @@ class UploadManager {
             
             console.log('✅ Upload successful via API for', file.name);
             
-            // 🔥 업로드 성공 후 파일매니저 새로고침
+            // 🔥 업로드 성공 후 파일매니저 새로고침 (특정 경로에 대해)
             this.refreshFileManagerAfterUpload(currentPath);
             
             return response;
@@ -400,7 +407,7 @@ class UploadManager {
             // Fallback to local storage
             const result = await this.uploadFileLocal(file, currentPath, task);
             
-            // 🔥 로컬 업로드 성공 후에도 파일매니저 새로고침
+            // 🔥 로컬 업로드 성공 후에도 파일매니저 새로고침 (특정 경로에 대해)
             this.refreshFileManagerAfterUpload(currentPath);
             
             return result;
@@ -914,11 +921,54 @@ class UploadManager {
         );
     }
 
-    // 🔥 업로드 성공 후 파일매니저 새로고침
-    refreshFileManagerAfterUpload(currentPath) {
-        if (window.fileManager) {
-            window.fileManager.loadFiles();
-            window.fileManager.loadStorageInfo();
+    // 🔥 업로드 성공 후 파일매니저 새로고침 (특정 경로에 대해)
+    refreshFileManagerAfterUpload(uploadPath) {
+        console.log('🔄 Refreshing file manager after upload to path:', uploadPath);
+        
+        if (!window.fileManager) {
+            console.warn('⚠️ FileManager not available for refresh');
+            return;
+        }
+        
+        try {
+            // 현재 fileManager의 경로 확인
+            const currentManagerPath = window.fileManager.getCurrentPath();
+            console.log('📁 Current manager path:', currentManagerPath);
+            console.log('📂 Upload path:', uploadPath);
+            
+            // 🔥 경로가 일치하는 경우에만 새로고침
+            if (currentManagerPath === uploadPath) {
+                console.log('✅ Paths match - refreshing current view');
+                
+                // 현재 경로의 파일 목록 새로고침
+                window.fileManager.loadFiles(uploadPath);
+                window.fileManager.loadStorageInfo();
+                
+                // 성공 알림 (선택적)
+                setTimeout(() => {
+                    console.log('🎉 File list refreshed for current folder');
+                }, 500);
+                
+            } else {
+                console.log('📍 Upload path differs from current path - no UI refresh needed');
+                console.log('  📁 Current:', currentManagerPath);
+                console.log('  📂 Upload:', uploadPath);
+                
+                // 다른 폴더에 업로드된 경우, 스토리지 정보만 업데이트
+                window.fileManager.loadStorageInfo();
+            }
+            
+        } catch (error) {
+            console.error('❌ Error refreshing file manager:', error);
+            
+            // 폴백: 기본 새로고침
+            try {
+                window.fileManager.loadFiles();
+                window.fileManager.loadStorageInfo();
+                console.log('🔄 Fallback refresh completed');
+            } catch (fallbackError) {
+                console.error('❌ Fallback refresh also failed:', fallbackError);
+            }
         }
     }
 }
