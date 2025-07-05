@@ -1342,87 +1342,110 @@ class FileManager {
 
     // Generate real thumbnail from file (for uploaded files)
     async generateRealThumbnail(file, fileObject) {
-        console.log('Generating real thumbnail for:', file.name, 'Type:', fileObject?.type);
+        console.log('🔥 FIREBASE STYLE - Real thumbnail generation started');
+        console.log('  📄 File:', file.name);
+        console.log('  📋 Type:', fileObject?.type);
         
         if (!fileObject || !Utils.isThumbnailSupported(file.name)) {
-            console.log('Thumbnail not supported or no file object for:', file.name);
+            console.log('❌ Thumbnail not supported or no file object:', file.name);
             return null;
         }
         
         const extension = file.name.split('.').pop().toLowerCase();
+        const contentType = fileObject.type || 'application/octet-stream';
+        
+        // 🔥 Firebase 스타일: 이미지가 아니면 종료
+        if (!contentType.startsWith('image/')) {
+            console.log('❌ 이미지 파일이 아님:', contentType);
+            return null;
+        }
+        
+        // 🔥 Firebase 스타일: 썸네일 중복 방지
+        if (file.name.includes('_thumb')) {
+            console.log('❌ 이미 썸네일임:', file.name);
+            return null;
+        }
         
         try {
             if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'].includes(extension)) {
-                console.log('Generating image thumbnail for:', file.name);
-                const thumbnail = await this.generateImageThumbnailFromFile(fileObject);
-                console.log('Image thumbnail generated successfully for:', file.name);
+                console.log('🖼️ Firebase 스타일 이미지 썸네일 생성:', file.name);
+                const thumbnail = await this.generateFirebaseStyleImageThumbnail(fileObject);
+                console.log('✅ Firebase 스타일 이미지 썸네일 생성 완료:', file.name);
                 return thumbnail;
             } else if (['mp4', 'webm', 'ogg'].includes(extension)) {
-                console.log('Generating video thumbnail for:', file.name);
-                const thumbnail = await this.generateVideoThumbnailFromFile(fileObject);
-                console.log('Video thumbnail generated successfully for:', file.name);
+                console.log('🎬 Firebase 스타일 비디오 썸네일 생성:', file.name);
+                const thumbnail = await this.generateFirebaseStyleVideoThumbnail(fileObject);
+                console.log('✅ Firebase 스타일 비디오 썸네일 생성 완료:', file.name);
                 return thumbnail;
             }
         } catch (error) {
-            console.error('Error generating thumbnail for', file.name, ':', error);
+            console.error('❌ Firebase 스타일 썸네일 생성 실패:', file.name, error);
             return null;
         }
         
         return null;
     }
 
-    // Generate image thumbnail from actual file
-    async generateImageThumbnailFromFile(fileObject) {
+    // 🔥 Firebase 스타일: Sharp와 유사한 고품질 이미지 썸네일 생성
+    async generateFirebaseStyleImageThumbnail(fileObject) {
         return new Promise((resolve, reject) => {
-            console.log('Starting image thumbnail generation from file');
+            console.log('🔥 FIREBASE STYLE - Sharp-like image thumbnail generation');
             
             const reader = new FileReader();
             
             reader.onload = (e) => {
-                console.log('File read successfully, creating image element');
                 const img = new Image();
                 
                 img.onload = () => {
-                    console.log('Image loaded, original size:', img.width, 'x', img.height);
+                    console.log('📷 Original image size:', img.width, 'x', img.height);
                     
                     try {
+                        // 🔥 Firebase Sharp 스타일: 200x200 리사이즈 (유지 비율)
+                        const targetSize = 200;
                         const canvas = document.createElement('canvas');
                         const ctx = canvas.getContext('2d');
                         
-                        // Calculate thumbnail size (maintain aspect ratio)
-                        const maxWidth = 200;
-                        const maxHeight = 150;
-                        
+                        // 🔥 Sharp 스타일: 비율 유지하면서 리사이즈
                         let { width, height } = img;
                         
-                        // Scale down if too large
-                        if (width > maxWidth || height > maxHeight) {
-                            const ratio = Math.min(maxWidth / width, maxHeight / height);
-                            width *= ratio;
-                            height *= ratio;
+                        if (width > height) {
+                            if (width > targetSize) {
+                                height = (height * targetSize) / width;
+                                width = targetSize;
+                            }
+                        } else {
+                            if (height > targetSize) {
+                                width = (width * targetSize) / height;
+                                height = targetSize;
+                            }
                         }
                         
                         canvas.width = width;
                         canvas.height = height;
                         
-                        console.log('Thumbnail size:', width, 'x', height);
+                        // 🔥 Sharp 스타일: 고품질 렌더링 설정
+                        ctx.imageSmoothingEnabled = true;
+                        ctx.imageSmoothingQuality = 'high';
                         
-                        // Draw image to canvas
+                        // 🔥 Sharp 스타일: 이미지 그리기
                         ctx.drawImage(img, 0, 0, width, height);
                         
-                        // Convert to data URL
-                        const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
-                        console.log('Thumbnail generated successfully');
+                        // 🔥 Firebase Sharp 스타일: JPEG 품질 80%
+                        const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+                        
+                        console.log('✅ Firebase Sharp 스타일 썸네일 생성 완료');
+                        console.log('  📐 Thumbnail size:', width, 'x', height);
+                        console.log('  📊 Quality: 80%');
                         
                         resolve(dataUrl);
                     } catch (error) {
-                        console.error('Error creating thumbnail canvas:', error);
+                        console.error('❌ Sharp 스타일 썸네일 생성 실패:', error);
                         reject(error);
                     }
                 };
                 
                 img.onerror = (error) => {
-                    console.error('Failed to load image for thumbnail:', error);
+                    console.error('❌ 이미지 로딩 실패:', error);
                     reject(new Error('Failed to load image'));
                 };
                 
@@ -1430,7 +1453,7 @@ class FileManager {
             };
             
             reader.onerror = (error) => {
-                console.error('Failed to read file for thumbnail:', error);
+                console.error('❌ 파일 읽기 실패:', error);
                 reject(new Error('Failed to read file'));
             };
             
@@ -1438,10 +1461,10 @@ class FileManager {
         });
     }
 
-    // Generate video thumbnail from actual file
-    async generateVideoThumbnailFromFile(fileObject) {
+    // 🔥 Firebase 스타일: 비디오 썸네일 생성 (개선된 버전)
+    async generateFirebaseStyleVideoThumbnail(fileObject) {
         return new Promise((resolve, reject) => {
-            console.log('Starting video thumbnail generation from file');
+            console.log('🔥 FIREBASE STYLE - Video thumbnail generation');
             
             const video = document.createElement('video');
             video.style.position = 'absolute';
@@ -1463,47 +1486,66 @@ class FileManager {
                         URL.revokeObjectURL(video.src);
                     }
                 } catch (e) {
-                    console.error('Cleanup error:', e);
+                    console.error('❌ Cleanup error:', e);
                 }
             };
             
+            // 🔥 Firebase 스타일: 더 짧은 타임아웃 (효율성)
             const timeoutId = setTimeout(() => {
-                console.warn('Video thumbnail generation timeout');
+                console.warn('⚠️ Video thumbnail timeout');
                 cleanup();
                 reject(new Error('Video thumbnail generation timeout'));
-            }, 8000);
+            }, 5000);
             
             video.onloadedmetadata = () => {
-                console.log('Video metadata loaded, duration:', video.duration);
-                // Seek to 1 second or 10% of video duration
+                console.log('📹 Video metadata loaded, duration:', video.duration);
+                // 🔥 Firebase 스타일: 1초 또는 10% 지점에서 썸네일 추출
                 const seekTime = Math.min(1, video.duration * 0.1);
                 video.currentTime = seekTime;
-                console.log('Seeking to time:', seekTime);
+                console.log('⏰ Seeking to:', seekTime, 'seconds');
             };
             
             video.onseeked = () => {
-                console.log('Video seek completed, generating thumbnail');
+                console.log('🎯 Video seek completed');
                 
                 try {
                     const canvas = document.createElement('canvas');
                     const ctx = canvas.getContext('2d');
                     
-                    // Set canvas size
-                    canvas.width = 200;
-                    canvas.height = 150;
+                    // 🔥 Firebase 스타일: 200x200 썸네일 (Sharp와 동일)
+                    const targetSize = 200;
+                    const aspectRatio = video.videoWidth / video.videoHeight;
                     
-                    // Draw video frame to canvas
-                    ctx.drawImage(video, 0, 0, 200, 150);
+                    let width, height;
+                    if (aspectRatio > 1) {
+                        width = targetSize;
+                        height = targetSize / aspectRatio;
+                    } else {
+                        width = targetSize * aspectRatio;
+                        height = targetSize;
+                    }
                     
-                    // Convert to data URL
-                    const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
-                    console.log('Video thumbnail generated successfully');
+                    canvas.width = width;
+                    canvas.height = height;
+                    
+                    // 🔥 Sharp 스타일: 고품질 렌더링
+                    ctx.imageSmoothingEnabled = true;
+                    ctx.imageSmoothingQuality = 'high';
+                    
+                    // 🔥 비디오 프레임 그리기
+                    ctx.drawImage(video, 0, 0, width, height);
+                    
+                    // 🔥 Firebase 스타일: JPEG 80% 품질
+                    const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+                    
+                    console.log('✅ Firebase 스타일 비디오 썸네일 생성 완료');
+                    console.log('  📐 Size:', width, 'x', height);
                     
                     clearTimeout(timeoutId);
                     cleanup();
                     resolve(dataUrl);
                 } catch (error) {
-                    console.error('Error creating video thumbnail canvas:', error);
+                    console.error('❌ 비디오 썸네일 캔버스 생성 실패:', error);
                     clearTimeout(timeoutId);
                     cleanup();
                     reject(error);
@@ -1511,24 +1553,36 @@ class FileManager {
             };
             
             video.onerror = (error) => {
-                console.error('Video error during thumbnail generation:', error);
+                console.error('❌ 비디오 로딩 실패:', error);
                 clearTimeout(timeoutId);
                 cleanup();
                 reject(new Error('Failed to load video'));
             };
             
-            // Create object URL and set as source
+            // 🔥 Firebase 스타일: 비디오 소스 설정
             try {
                 const videoUrl = URL.createObjectURL(fileObject);
                 video.src = videoUrl;
-                console.log('Video source set, waiting for metadata...');
+                console.log('🎬 Video source set, waiting for metadata...');
             } catch (error) {
-                console.error('Error setting video source:', error);
+                console.error('❌ 비디오 소스 설정 실패:', error);
                 clearTimeout(timeoutId);
                 cleanup();
                 reject(error);
             }
         });
+    }
+
+    // Generate image thumbnail from actual file
+    async generateImageThumbnailFromFile(fileObject) {
+        // 🔥 Firebase 스타일 사용
+        return this.generateFirebaseStyleImageThumbnail(fileObject);
+    }
+
+    // Generate video thumbnail from actual file
+    async generateVideoThumbnailFromFile(fileObject) {
+        // 🔥 Firebase 스타일 사용
+        return this.generateFirebaseStyleVideoThumbnail(fileObject);
     }
 
     // Get file icon

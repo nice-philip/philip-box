@@ -447,23 +447,8 @@ class UploadManager {
                     fullPath: uploadPath === '/' ? `/${file.name}` : `${uploadPath}/${file.name}`
                 });
                 
-                // Generate thumbnail if supported
-                if (Utils.isThumbnailSupported(file.name)) {
-                    try {
-                        console.log('🖼️ Generating thumbnail for:', file.name);
-                        
-                        if (window.fileManager && typeof window.fileManager.generateRealThumbnail === 'function') {
-                            const thumbnailData = await window.fileManager.generateRealThumbnail(fileData, file);
-                            if (thumbnailData) {
-                                fileData.thumbnail = thumbnailData;
-                                console.log('✅ Thumbnail generated for:', file.name);
-                            }
-                        }
-                    } catch (thumbnailError) {
-                        console.error('❌ Thumbnail generation failed:', thumbnailError);
-                        // Continue without thumbnail
-                    }
-                }
+                // 🔥 Firebase 스타일: 이미지 썸네일 생성 개선
+                await this.generateFirebaseStyleThumbnail(fileData, file);
                 
                 // 🔥 Firebase 스타일: 저장소에 파일 저장
                 const storedFiles = JSON.parse(localStorage.getItem('stored_files') || '[]');
@@ -489,6 +474,56 @@ class UploadManager {
                 reject(error);
             }
         });
+    }
+
+    // 🔥 Firebase 스타일: 자동 썸네일 생성 (onFinalize 트리거와 유사)
+    async generateFirebaseStyleThumbnail(fileData, fileObject) {
+        const contentType = fileObject.type || 'application/octet-stream';
+        const fileName = fileData.name;
+        const filePath = fileData.path === '/' ? `/${fileName}` : `${fileData.path}/${fileName}`;
+        
+        console.log('🔥 FIREBASE STYLE - Auto thumbnail generation triggered');
+        console.log('  📄 File:', fileName);
+        console.log('  📁 Path:', filePath);
+        console.log('  📋 Content Type:', contentType);
+        
+        // 🔥 Firebase 스타일: 이미지가 아니면 종료
+        if (!contentType.startsWith('image/')) {
+            console.log('❌ 이미지 파일이 아님:', contentType);
+            return;
+        }
+        
+        // 🔥 Firebase 스타일: 썸네일 중복 방지
+        if (fileName.includes('_thumb')) {
+            console.log('❌ 이미 썸네일임:', fileName);
+            return;
+        }
+        
+        try {
+            console.log('🖼️ Firebase 스타일 썸네일 생성 시작:', fileName);
+            
+            // 📌 Firebase 스타일: 썸네일 파일명 생성
+            const thumbFileName = fileName.replace(/\.(jpg|jpeg|png|gif|webp|bmp)$/i, '_thumb.jpg');
+            console.log('  📸 Thumbnail name:', thumbFileName);
+            
+            // 🔥 실제 썸네일 생성
+            if (window.fileManager && typeof window.fileManager.generateRealThumbnail === 'function') {
+                const thumbnailData = await window.fileManager.generateRealThumbnail(fileData, fileObject);
+                if (thumbnailData) {
+                    fileData.thumbnail = thumbnailData;
+                    fileData.thumbnailName = thumbFileName;
+                    console.log('✅ Firebase 스타일 썸네일 생성 완료:', thumbFileName);
+                } else {
+                    console.log('⚠️ 썸네일 데이터 없음:', fileName);
+                }
+            } else {
+                console.warn('⚠️ FileManager 또는 generateRealThumbnail 메서드 없음');
+            }
+            
+        } catch (error) {
+            console.error('❌ Firebase 스타일 썸네일 생성 실패:', error);
+            // Firebase 스타일: 썸네일 생성 실패해도 원본 파일 업로드는 계속
+        }
     }
 
     // Determine upload path with multiple fallbacks
