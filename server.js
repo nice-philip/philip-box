@@ -447,27 +447,33 @@ process.on('SIGTERM', () => {
     console.log('SIGTERM received. Shutting down gracefully...');
 
     // Close server
-    server.close(() => {
+    server.close(async () => {
         console.log('HTTP server closed.');
 
         // Close database connection
-        mongoose.connection.close(false, () => {
+        try {
+            await mongoose.connection.close();
             console.log('MongoDB connection closed.');
-            process.exit(0);
-        });
+        } catch (error) {
+            console.error('Error closing MongoDB connection:', error);
+        }
+        process.exit(0);
     });
 });
 
 process.on('SIGINT', () => {
     console.log('SIGINT received. Shutting down gracefully...');
 
-    server.close(() => {
+    server.close(async () => {
         console.log('HTTP server closed.');
 
-        mongoose.connection.close(false, () => {
+        try {
+            await mongoose.connection.close();
             console.log('MongoDB connection closed.');
-            process.exit(0);
-        });
+        } catch (error) {
+            console.error('Error closing MongoDB connection:', error);
+        }
+        process.exit(0);
     });
 });
 
