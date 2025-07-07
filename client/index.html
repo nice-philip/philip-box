@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MyDropbox - Philip Box</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="header-left">
+            <div class="logo">
+                <i class="fas fa-cloud"></i>
+                <span>MyDropbox</span>
+            </div>
+            <nav class="nav">
+                <a href="#" class="nav-item active" data-section="files">파일</a>
+                <a href="#" class="nav-item" data-section="shared">공유됨</a>
+                <a href="#" class="nav-item" data-section="recent">최근</a>
+                <a href="#" class="nav-item" data-section="important">중요</a>
+                <a href="#" class="nav-item" data-section="deleted">삭제됨</a>
+            </nav>
+        </div>
+        <div class="header-right">
+            <div class="search-box">
+                <i class="fas fa-search"></i>
+                <input type="text" placeholder="파일 검색..." id="searchInput">
+                <button class="search-ai-btn" id="searchAIBtn" title="AI 검색">
+                    <i class="fas fa-magic"></i>
+                </button>
+            </div>
+            <div class="user-menu">
+                <div class="user-avatar" id="userAvatar">
+                    <i class="fas fa-user"></i>
+                </div>
+                <div class="user-dropdown" id="userDropdown">
+                    <div class="user-info">
+                        <span id="userName">사용자</span>
+                        <span id="userEmail">user@example.com</span>
+                    </div>
+                    <hr>
+                    <a href="#" id="logoutBtn"><i class="fas fa-sign-out-alt"></i> 로그아웃</a>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-actions">
+                <button class="btn btn-primary" id="uploadBtn">
+                    <i class="fas fa-upload"></i>
+                    업로드
+                </button>
+                <button class="btn btn-secondary" id="createFolderBtn">
+                    <i class="fas fa-folder-plus"></i>
+                    새 폴더
+                </button>
+            </div>
+            <div class="sidebar-storage">
+                <div class="storage-info">
+                    <div class="storage-bar">
+                        <div class="storage-used" id="storageUsed"></div>
+                    </div>
+                    <div class="storage-text">
+                        <span id="storageText">0GB / 2GB 사용</span>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- File Area -->
+        <section class="file-area">
+            <!-- Breadcrumb -->
+            <div class="breadcrumb">
+                <div class="breadcrumb-nav" id="breadcrumbNav">
+                    <a href="#" data-path="/" class="breadcrumb-item active">내 파일</a>
+                </div>
+                <div class="view-options">
+                    <button class="view-btn active" data-view="grid" id="gridViewBtn">
+                        <i class="fas fa-th-large"></i>
+                    </button>
+                    <button class="view-btn" data-view="list" id="listViewBtn">
+                        <i class="fas fa-list"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- File List -->
+            <div class="file-container" id="fileContainer">
+                <div class="file-list" id="fileList">
+                    <!-- Files will be dynamically loaded here -->
+                </div>
+            </div>
+
+            <!-- Upload Area -->
+            <div class="upload-area" id="uploadArea">
+                <div class="upload-zone" id="uploadZone">
+                    <i class="fas fa-cloud-upload-alt"></i>
+                    <p>파일을 여기에 드래그하거나 클릭하여 업로드</p>
+                    <input type="file" id="fileInput" multiple hidden>
+                </div>
+                <div class="upload-progress" id="uploadProgress">
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="progressFill"></div>
+                    </div>
+                    <div class="progress-text" id="progressText">업로드 중...</div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Modals -->
+    <!-- Login Modal -->
+    <div class="modal" id="loginModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>로그인</h2>
+                <button class="modal-close" id="loginModalClose">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="loginForm">
+                    <div class="form-group">
+                        <label for="loginEmail">이메일</label>
+                        <input type="email" id="loginEmail" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="loginPassword">비밀번호</label>
+                        <input type="password" id="loginPassword" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary">로그인</button>
+                    <p class="auth-link">계정이 없으신가요? <a href="#" id="showRegister">회원가입</a></p>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Register Modal -->
+    <div class="modal" id="registerModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>회원가입</h2>
+                <button class="modal-close" id="registerModalClose">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="registerForm">
+                    <div class="form-group">
+                        <label for="registerName">이름</label>
+                        <input type="text" id="registerName" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="registerEmail">이메일</label>
+                        <input type="email" id="registerEmail" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="registerPassword">비밀번호</label>
+                        <input type="password" id="registerPassword" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="confirmPassword">비밀번호 확인</label>
+                        <input type="password" id="confirmPassword" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary">회원가입</button>
+                    <p class="auth-link">이미 계정이 있으신가요? <a href="#" id="showLogin">로그인</a></p>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- File Preview Modal -->
+    <div class="modal" id="previewModal">
+        <div class="modal-content modal-large">
+            <div class="modal-header">
+                <h2 id="previewTitle">파일 미리보기</h2>
+                <button class="modal-close" id="previewModalClose">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="preview-container" id="previewContainer">
+                    <!-- Preview content will be loaded here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- File Details Modal -->
+    <div class="modal" id="fileDetailsModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>파일 세부정보</h2>
+                <button class="modal-close" id="fileDetailsModalClose">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="file-details-container" id="fileDetailsContainer">
+                    <div class="file-details-thumbnail" id="fileDetailsThumbnail">
+                        <i class="fas fa-file"></i>
+                    </div>
+                    <div class="file-details-info" id="fileDetailsInfo">
+                        <div class="detail-row">
+                            <label>파일명:</label>
+                            <span id="fileDetailsName">-</span>
+                        </div>
+                        <div class="detail-row">
+                            <label>크기:</label>
+                            <span id="fileDetailsSize">-</span>
+                        </div>
+                        <div class="detail-row">
+                            <label>형식:</label>
+                            <span id="fileDetailsType">-</span>
+                        </div>
+                        <div class="detail-row">
+                            <label>소유자:</label>
+                            <span id="fileDetailsOwner">-</span>
+                        </div>
+                        <div class="detail-row">
+                            <label>생성일:</label>
+                            <span id="fileDetailsCreated">-</span>
+                        </div>
+                        <div class="detail-row">
+                            <label>수정일:</label>
+                            <span id="fileDetailsModified">-</span>
+                        </div>
+                        <div class="detail-row">
+                            <label>마지막 열람:</label>
+                            <span id="fileDetailsLastViewed">-</span>
+                        </div>
+                        <div class="detail-row">
+                            <label>설명:</label>
+                            <textarea id="fileDetailsDescription" placeholder="파일에 대한 설명을 입력하세요..."></textarea>
+                        </div>
+                    </div>
+                    <div class="file-details-actions">
+                        <button class="btn btn-primary" id="saveDescription">
+                            <i class="fas fa-save"></i>
+                            설명 저장
+                        </button>
+                        <button class="btn btn-secondary" id="markImportant">
+                            <i class="fas fa-star"></i>
+                            중요 표시
+                        </button>
+                        <button class="btn btn-secondary" id="downloadFromDetails">
+                            <i class="fas fa-download"></i>
+                            다운로드
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Share Modal -->
+    <div class="modal" id="shareModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>파일 공유</h2>
+                <button class="modal-close" id="shareModalClose">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="share-container">
+                    <div class="share-file-info">
+                        <div class="share-file-icon">
+                            <i class="fas fa-file"></i>
+                        </div>
+                        <div class="share-file-name" id="shareFileName">파일명</div>
+                    </div>
+
+                    <div class="share-options">
+                        <div class="form-group">
+                            <label>공유 유형:</label>
+                            <div class="radio-group">
+                                <label class="radio-label">
+                                    <input type="radio" name="shareType" value="private" checked>
+                                    <span class="radio-custom"></span>
+                                    비공개 (링크가 있는 사람만)
+                                </label>
+                                <label class="radio-label">
+                                    <input type="radio" name="shareType" value="public">
+                                    <span class="radio-custom"></span>
+                                    공개 (모든 사람)
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="sharePermissions">권한:</label>
+                            <select id="sharePermissions">
+                                <option value="view">보기만 가능</option>
+                                <option value="comment">댓글 작성 가능</option>
+                                <option value="edit">편집 가능</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="shareExpiry">
+                                <span class="checkbox-custom"></span>
+                                만료일 설정
+                            </label>
+                            <input type="date" id="shareExpiryDate" disabled>
+                        </div>
+
+                        <div class="share-link-container">
+                            <label>공유 링크:</label>
+                            <div class="share-link-input">
+                                <input type="text" id="shareLink" readonly placeholder="먼저 '링크 생성' 버튼을 클릭하세요">
+                                <button class="btn btn-secondary" id="copyShareLink" disabled>
+                                    <i class="fas fa-copy"></i>
+                                    복사
+                                </button>
+                            </div>
+                            <div class="share-link-note" id="shareLinkNote" style="display: none;">
+                                <i class="fas fa-info-circle"></i>
+                                <span>이 링크를 통해 파일에 접근할 수 있습니다</span>
+                            </div>
+                        </div>
+
+                        <div class="share-actions">
+                            <button class="btn btn-primary" id="generateShareLink">
+                                <i class="fas fa-link"></i>
+                                링크 생성
+                            </button>
+                            <button class="btn btn-secondary" id="testShareLink" disabled>
+                                <i class="fas fa-external-link-alt"></i>
+                                링크 테스트
+                            </button>
+                            <button class="btn btn-secondary" id="revokeShareLink" disabled>
+                                <i class="fas fa-times"></i>
+                                링크 취소
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- AI Search Modal -->
+    <div class="modal" id="aiSearchModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>AI 검색</h2>
+                <button class="modal-close" id="aiSearchModalClose">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="ai-search-container">
+                    <div class="ai-search-input">
+                        <textarea id="aiSearchQuery" placeholder="무엇을 찾고 계신가요? 예: '지난주에 만든 프레젠테이션 파일', '크기가 큰 이미지 파일들'"></textarea>
+                        <button class="btn btn-primary" id="aiSearchBtn">
+                            <i class="fas fa-search"></i>
+                            검색
+                        </button>
+                    </div>
+                    <div class="ai-search-results" id="aiSearchResults">
+                        <!-- AI search results will be displayed here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Context Menu -->
+    <div class="context-menu" id="contextMenu">
+        <div class="context-item" id="openFile">
+            <i class="fas fa-eye"></i> 열기
+        </div>
+        <div class="context-item" id="downloadFile">
+            <i class="fas fa-download"></i> 다운로드
+        </div>
+        <div class="context-item" id="shareFile">
+            <i class="fas fa-share-alt"></i> 공유
+        </div>
+        <div class="context-item" id="fileDetails">
+            <i class="fas fa-info-circle"></i> 세부정보
+        </div>
+        <div class="context-item context-separator"></div>
+        <div class="context-item" id="renameFile">
+            <i class="fas fa-edit"></i> 이름 바꾸기
+        </div>
+        <div class="context-item" id="moveFile">
+            <i class="fas fa-cut"></i> 이동
+        </div>
+        <div class="context-item" id="toggleImportant">
+            <i class="fas fa-star"></i> 중요 표시
+        </div>
+        <div class="context-item context-separator"></div>
+        <div class="context-item context-danger" id="deleteFile">
+            <i class="fas fa-trash"></i> 삭제
+        </div>
+    </div>
+
+    <!-- Loading Spinner -->
+    <div class="loading-spinner" id="loadingSpinner">
+        <div class="spinner"></div>
+    </div>
+
+    <!-- Notification -->
+    <div class="notification" id="notification">
+        <div class="notification-content">
+            <i class="fas fa-check-circle"></i>
+            <span id="notificationText">알림 메시지</span>
+        </div>
+    </div>
+
+    <!-- Debug Panel (only visible in development) -->
+    <div class="debug-panel" id="debugPanel" style="display: none;">
+        <div class="debug-header">
+            <h4>디버그 정보</h4>
+            <button onclick="this.parentElement.parentElement.style.display='none'">&times;</button>
+        </div>
+        <div class="debug-content">
+            <div class="debug-item">
+                <label>인증 상태:</label>
+                <span id="debugAuthStatus">-</span>
+            </div>
+            <div class="debug-item">
+                <label>사용자:</label>
+                <span id="debugUser">-</span>
+            </div>
+            <div class="debug-item">
+                <label>토큰:</label>
+                <span id="debugToken">-</span>
+            </div>
+            <div class="debug-item">
+                <label>초기화:</label>
+                <span id="debugInitialized">-</span>
+            </div>
+            <div class="debug-item">
+                <label>파일 매니저:</label>
+                <span id="debugFileManager">-</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Create Folder Modal -->
+    <div class="modal" id="createFolderModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>새 폴더 생성</h2>
+                <button class="modal-close" id="createFolderModalClose">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="createFolderForm">
+                    <div class="form-group">
+                        <label for="folderName">폴더 이름</label>
+                        <input 
+                            type="text" 
+                            id="folderName" 
+                            placeholder="새 폴더" 
+                            required
+                            maxlength="255"
+                        >
+                        <div class="input-help">
+                            <span>현재 위치: <span id="currentPathDisplay">/</span></span>
+                        </div>
+                    </div>
+                    <div class="form-actions">
+                        <button type="button" class="btn btn-secondary" id="cancelFolderBtn">취소</button>
+                        <button type="submit" class="btn btn-primary" id="createFolderSubmitBtn">생성</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="config.js"></script>
+    <script src="utils.js"></script>
+    <script src="./auth.js"></script>
+    <script src="fileManager.js"></script>
+    <script src="upload.js"></script>
+    <script src="preview.js"></script>
+    <script src="script.js"></script>
+    <script src="shareManager.js"></script>
+
+
+    <script>
+        // Debug panel functionality
+        function showDebugPanel() {
+            const debugPanel = document.getElementById('debugPanel');
+            const debugAuthStatus = document.getElementById('debugAuthStatus');
+            const debugUser = document.getElementById('debugUser');
+            const debugToken = document.getElementById('debugToken');
+            const debugInitialized = document.getElementById('debugInitialized');
+            const debugFileManager = document.getElementById('debugFileManager');
+
+            if (debugPanel) {
+                debugPanel.style.display = 'block';
+
+                // Update debug info
+                setInterval(() => {
+                    const authManager = window.authManager;
+                    const fileManager = window.fileManager;
+
+                    if (authManager) {
+                        debugAuthStatus.textContent = authManager.isAuthenticated() ? '로그인됨' : '로그아웃됨';
+                        debugUser.textContent = authManager.currentUser ? authManager.currentUser.email || '없음' : '없음';
+                        debugToken.textContent = localStorage.getItem('dropbox_token') ? '있음' : '없음';
+                        debugInitialized.textContent = authManager.isInitialized() ? '완료' : '진행중';
+                    }
+
+                    if (fileManager) {
+                        debugFileManager.textContent = '사용 가능';
+                    } else {
+                        debugFileManager.textContent = '사용 불가';
+                    }
+                }, 1000);
+            }
+        }
+
+        // Show debug panel in development
+        if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+            // Show debug panel after 3 seconds
+            setTimeout(() => {
+                showDebugPanel();
+            }, 3000);
+        }
+
+        // Global debug function
+        window.showDebug = showDebugPanel;
+    </script>
+</body>
+
+</html>

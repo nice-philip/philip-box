@@ -1,0 +1,669 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>공유 파일 - Philip Box</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #0061ff 0%, #60efff 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .share-container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+            max-width: 600px;
+            width: 100%;
+            animation: fadeIn 0.6s ease-out;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .share-header {
+            background: linear-gradient(135deg, #0061ff 0%, #60efff 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .share-header h1 {
+            font-size: 28px;
+            margin-bottom: 10px;
+            font-weight: 600;
+        }
+
+        .share-header p {
+            font-size: 16px;
+            opacity: 0.9;
+        }
+
+        .share-content {
+            padding: 40px;
+        }
+
+        .file-info {
+            display: flex;
+            align-items: center;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 12px;
+            margin-bottom: 30px;
+        }
+
+        .file-icon {
+            width: 60px;
+            height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 30px;
+            color: #0061ff;
+            margin-right: 20px;
+            flex-shrink: 0;
+        }
+
+        .file-details h2 {
+            font-size: 20px;
+            color: #333;
+            margin-bottom: 5px;
+        }
+
+        .file-details p {
+            color: #666;
+            font-size: 14px;
+            margin-bottom: 3px;
+        }
+
+        .file-preview {
+            margin-bottom: 30px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 12px;
+            text-align: center;
+        }
+
+        .file-preview img {
+            max-width: 100%;
+            max-height: 300px;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .file-preview video {
+            max-width: 100%;
+            max-height: 300px;
+            border-radius: 8px;
+        }
+
+        .file-actions {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .action-btn {
+            background: #0061ff;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 25px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .action-btn:hover {
+            background: #0052cc;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 12px rgba(0, 97, 255, 0.3);
+        }
+
+        .action-btn.secondary {
+            background: #6c757d;
+        }
+
+        .action-btn.secondary:hover {
+            background: #5a6268;
+        }
+
+        .error-message {
+            text-align: center;
+            color: #dc3545;
+            font-size: 18px;
+            margin-top: 20px;
+        }
+
+        .error-icon {
+            font-size: 48px;
+            margin-bottom: 20px;
+            color: #dc3545;
+        }
+
+        .share-info {
+            background: #e3f2fd;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+
+        .share-info h3 {
+            color: #0061ff;
+            margin-bottom: 10px;
+        }
+
+        .share-info p {
+            color: #666;
+            font-size: 14px;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+
+        .loading i {
+            font-size: 48px;
+            margin-bottom: 20px;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        @media (max-width: 768px) {
+            .share-container {
+                margin: 10px;
+            }
+            
+            .share-header {
+                padding: 20px;
+            }
+            
+            .share-content {
+                padding: 20px;
+            }
+            
+            .file-info {
+                flex-direction: column;
+                text-align: center;
+            }
+            
+            .file-icon {
+                margin-right: 0;
+                margin-bottom: 15px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="share-container">
+        <div class="share-header">
+            <h1><i class="fas fa-share-alt"></i> Philip Box</h1>
+            <p>공유된 파일</p>
+        </div>
+
+        <div class="share-content">
+            <div id="loading" class="loading">
+                <i class="fas fa-spinner"></i>
+                <p>파일을 불러오는 중...</p>
+            </div>
+
+            <div id="file-display" style="display: none;">
+                <div class="file-info">
+                    <div class="file-icon">
+                        <i id="file-icon" class="fas fa-file"></i>
+                    </div>
+                    <div class="file-details">
+                        <h2 id="file-name">파일명</h2>
+                        <p id="file-size">파일 크기</p>
+                        <p id="file-type">파일 타입</p>
+                        <p id="shared-date">공유일</p>
+                    </div>
+                </div>
+
+                <div id="share-info" class="share-info">
+                    <h3>공유 정보</h3>
+                    <p id="share-details">공유 세부사항</p>
+                </div>
+
+                <div id="file-preview" class="file-preview" style="display: none;">
+                    <!-- 파일 미리보기가 여기에 표시됩니다 -->
+                </div>
+
+                <div class="file-actions">
+                    <button id="download-btn" class="action-btn">
+                        <i class="fas fa-download"></i> 다운로드
+                    </button>
+                    <button id="preview-btn" class="action-btn secondary" style="display: none;">
+                        <i class="fas fa-eye"></i> 미리보기
+                    </button>
+                </div>
+            </div>
+
+            <div id="error-display" style="display: none; text-align: center;">
+                <div class="error-icon">
+                    <i class="fas fa-exclamation-triangle"></i>
+                </div>
+                <div class="error-message">
+                    <h3>파일을 찾을 수 없습니다</h3>
+                    <p>공유 링크가 만료되었거나 잘못된 링크입니다.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Philip Box Share Page - Independent File Sharing
+        class SharePageManager {
+            constructor() {
+                this.shareId = null;
+                this.shareData = null;
+                this.initialize();
+            }
+
+            initialize() {
+                console.log('🔗 Initializing Share Page Manager');
+                this.loadShareFromUrl();
+            }
+
+            loadShareFromUrl() {
+                // Get share ID from URL parameters
+                const urlParams = new URLSearchParams(window.location.search);
+                this.shareId = urlParams.get('share');
+                
+                console.log('🔍 Share ID from URL:', this.shareId);
+                
+                if (!this.shareId) {
+                    this.showError('공유 링크가 유효하지 않습니다.');
+                    return;
+                }
+
+                this.loadSharedFile();
+            }
+
+            loadSharedFile() {
+                try {
+                    console.log('📂 Loading shared file with ID:', this.shareId);
+                    
+                    // Get share data from localStorage
+                    const shareDataStr = localStorage.getItem(`share_${this.shareId}`);
+                    
+                    if (!shareDataStr) {
+                        this.showError('공유 파일을 찾을 수 없습니다.');
+                        return;
+                    }
+                    
+                    this.shareData = JSON.parse(shareDataStr);
+                    
+                    // Check if share is expired
+                    if (this.shareData.expiry && new Date(this.shareData.expiry) < new Date()) {
+                        this.showError('이 공유 링크가 만료되었습니다.');
+                        return;
+                    }
+                    
+                    // Update access count
+                    this.shareData.accessCount = (this.shareData.accessCount || 0) + 1;
+                    this.shareData.lastAccessed = new Date().toISOString();
+                    localStorage.setItem(`share_${this.shareId}`, JSON.stringify(this.shareData));
+                    
+                    console.log('✅ Shared file loaded:', this.shareData.fileName);
+                    
+                    // Display the shared file
+                    this.displaySharedFile();
+                    
+                } catch (error) {
+                    console.error('❌ Error loading shared file:', error);
+                    this.showError('공유 파일을 불러오는 중 오류가 발생했습니다.');
+                }
+            }
+
+            displaySharedFile() {
+                const fileData = this.shareData.fileData;
+                
+                // Update page title
+                document.title = `${fileData.name} - Philip Box 공유`;
+                
+                // Update file info
+                this.updateFileInfo(fileData);
+                
+                // Update share info
+                this.updateShareInfo();
+                
+                // Show file preview if possible
+                this.updateFilePreview(fileData);
+                
+                // Setup download action
+                this.setupDownloadAction(fileData);
+                
+                // Hide loading and show content
+                this.showContent();
+            }
+
+            updateFileInfo(fileData) {
+                const fileIcon = document.querySelector('.file-icon');
+                const fileName = document.querySelector('.file-details h2');
+                const fileSize = document.querySelector('.file-details p:nth-child(2)');
+                const fileType = document.querySelector('.file-details p:nth-child(3)');
+                const fileDate = document.querySelector('.file-details p:nth-child(4)');
+                
+                if (fileIcon) {
+                    fileIcon.innerHTML = `<i class="${this.getFileIcon(fileData)}"></i>`;
+                }
+                
+                if (fileName) {
+                    fileName.textContent = fileData.name;
+                }
+                
+                if (fileSize) {
+                    fileSize.textContent = `크기: ${this.formatFileSize(fileData.size)}`;
+                }
+                
+                if (fileType) {
+                    fileType.textContent = `형식: ${fileData.mimeType || 'Unknown'}`;
+                }
+                
+                if (fileDate) {
+                    fileDate.textContent = `수정일: ${this.formatDate(fileData.modified)}`;
+                }
+            }
+
+            updateShareInfo() {
+                const shareInfo = document.querySelector('.share-info');
+                if (shareInfo) {
+                    const shareType = this.shareData.shareType === 'public' ? '공개' : '비공개';
+                    const permissions = this.shareData.permissions === 'edit' ? '편집 가능' : '보기 전용';
+                    const createdAt = this.formatDate(this.shareData.createdAt);
+                    
+                    shareInfo.innerHTML = `
+                        <h3>공유 정보</h3>
+                        <p><strong>유형:</strong> ${shareType}</p>
+                        <p><strong>권한:</strong> ${permissions}</p>
+                        <p><strong>생성일:</strong> ${createdAt}</p>
+                        <p><strong>접근 횟수:</strong> ${this.shareData.accessCount || 0}회</p>
+                        ${this.shareData.expiry ? `<p><strong>만료일:</strong> ${this.formatDate(this.shareData.expiry)}</p>` : ''}
+                    `;
+                }
+            }
+
+            updateFilePreview(fileData) {
+                const preview = document.querySelector('.file-preview');
+                if (!preview) return;
+                
+                const extension = fileData.name.split('.').pop().toLowerCase();
+                
+                if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'].includes(extension)) {
+                    // Image preview
+                    preview.innerHTML = `
+                        <img src="${fileData.thumbnail || this.createPlaceholderImage(fileData)}" 
+                             alt="${fileData.name}" 
+                             onload="this.style.opacity=1"
+                             onerror="this.style.display='none'">
+                    `;
+                } else if (['mp4', 'webm', 'ogg'].includes(extension)) {
+                    // Video preview
+                    preview.innerHTML = `
+                        <video controls>
+                            <source src="${this.createVideoPlaceholder(fileData)}" type="${fileData.mimeType}">
+                            비디오를 재생할 수 없습니다.
+                        </video>
+                    `;
+                } else if (['txt', 'json', 'html', 'css', 'js'].includes(extension)) {
+                    // Text file preview
+                    preview.innerHTML = `
+                        <div style="text-align: left; background: #f8f9fa; padding: 20px; border-radius: 8px;">
+                            <h4>파일 미리보기</h4>
+                            <pre style="white-space: pre-wrap; font-family: monospace; font-size: 14px; max-height: 300px; overflow-y: auto;">${this.escapeHtml(fileData.content || '내용을 불러올 수 없습니다.')}</pre>
+                        </div>
+                    `;
+                } else {
+                    // Default file preview
+                    preview.innerHTML = `
+                        <div style="text-align: center; padding: 40px;">
+                            <i class="${this.getFileIcon(fileData)}" style="font-size: 64px; color: #0061ff; margin-bottom: 20px;"></i>
+                            <p>이 파일 형식은 미리보기를 지원하지 않습니다.</p>
+                        </div>
+                    `;
+                }
+            }
+
+            setupDownloadAction(fileData) {
+                const downloadBtn = document.querySelector('.action-btn');
+                if (downloadBtn) {
+                    downloadBtn.addEventListener('click', () => {
+                        this.downloadFile(fileData);
+                    });
+                }
+            }
+
+            downloadFile(fileData) {
+                try {
+                    console.log('📥 Downloading shared file:', fileData.name);
+                    
+                    // Get file content
+                    const content = fileData.content || this.createFileContent(fileData);
+                    
+                    // Create download blob
+                    const blob = new Blob([content], { type: fileData.mimeType || 'application/octet-stream' });
+                    const url = URL.createObjectURL(blob);
+                    
+                    // Create download link
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = fileData.name;
+                    a.style.display = 'none';
+                    
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    
+                    URL.revokeObjectURL(url);
+                    
+                    console.log('✅ Download completed:', fileData.name);
+                    
+                } catch (error) {
+                    console.error('❌ Download failed:', error);
+                    alert('다운로드 중 오류가 발생했습니다.');
+                }
+            }
+
+            createFileContent(fileData) {
+                const extension = fileData.name.split('.').pop()?.toLowerCase() || 'txt';
+                
+                const basicInfo = `
+📁 파일명: ${fileData.name}
+📊 크기: ${this.formatFileSize(fileData.size || 1024)}
+📅 생성일: ${fileData.created || new Date().toISOString()}
+📝 수정일: ${fileData.modified || new Date().toISOString()}
+🏷️ 타입: ${fileData.mimeType || 'Unknown'}
+🔗 공유ID: ${this.shareId}
+
+🌟 Philip Box 공유 파일입니다.
+이 파일은 ${this.shareData.createdBy || 'Unknown'}님이 공유하셨습니다.
+                `.trim();
+
+                switch (extension) {
+                    case 'txt':
+                        return basicInfo;
+                    case 'json':
+                        return JSON.stringify({
+                            fileName: fileData.name,
+                            size: fileData.size || 1024,
+                            shareId: this.shareId,
+                            sharedBy: this.shareData.createdBy,
+                            content: "Philip Box 공유 JSON 파일입니다."
+                        }, null, 2);
+                    case 'html':
+                        return `<!DOCTYPE html>
+<html>
+<head>
+    <title>${fileData.name}</title>
+    <meta charset="UTF-8">
+</head>
+<body>
+    <h1>📁 ${fileData.name}</h1>
+    <p>🌟 Philip Box 공유 파일입니다.</p>
+    <pre>${basicInfo}</pre>
+</body>
+</html>`;
+                    default:
+                        return basicInfo;
+                }
+            }
+
+            createPlaceholderImage(fileData) {
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                
+                canvas.width = 400;
+                canvas.height = 300;
+                
+                const gradient = ctx.createLinearGradient(0, 0, 400, 300);
+                gradient.addColorStop(0, '#0061ff');
+                gradient.addColorStop(1, '#60efff');
+                
+                ctx.fillStyle = gradient;
+                ctx.fillRect(0, 0, 400, 300);
+                
+                ctx.fillStyle = 'white';
+                ctx.font = '20px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText('📷 ' + fileData.name, 200, 140);
+                
+                ctx.font = '14px Arial';
+                ctx.fillText(this.formatFileSize(fileData.size), 200, 170);
+                
+                return canvas.toDataURL();
+            }
+
+            getFileIcon(fileData) {
+                if (fileData.type === 'folder') return 'fas fa-folder';
+                
+                const extension = fileData.name.split('.').pop()?.toLowerCase() || '';
+                const iconMap = {
+                    'txt': 'fas fa-file-alt',
+                    'pdf': 'fas fa-file-pdf',
+                    'doc': 'fas fa-file-word',
+                    'docx': 'fas fa-file-word',
+                    'xls': 'fas fa-file-excel',
+                    'xlsx': 'fas fa-file-excel',
+                    'ppt': 'fas fa-file-powerpoint',
+                    'pptx': 'fas fa-file-powerpoint',
+                    'jpg': 'fas fa-file-image',
+                    'jpeg': 'fas fa-file-image',
+                    'png': 'fas fa-file-image',
+                    'gif': 'fas fa-file-image',
+                    'mp4': 'fas fa-file-video',
+                    'avi': 'fas fa-file-video',
+                    'mov': 'fas fa-file-video',
+                    'mp3': 'fas fa-file-audio',
+                    'wav': 'fas fa-file-audio',
+                    'zip': 'fas fa-file-archive',
+                    'rar': 'fas fa-file-archive',
+                    'html': 'fas fa-file-code',
+                    'css': 'fas fa-file-code',
+                    'js': 'fas fa-file-code',
+                    'json': 'fas fa-file-code'
+                };
+                
+                return iconMap[extension] || 'fas fa-file';
+            }
+
+            formatFileSize(bytes) {
+                if (bytes === 0) return '0 Bytes';
+                const k = 1024;
+                const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+                const i = Math.floor(Math.log(bytes) / Math.log(k));
+                return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+            }
+
+            formatDate(dateString) {
+                if (!dateString) return 'Unknown';
+                const date = new Date(dateString);
+                return date.toLocaleDateString('ko-KR') + ' ' + date.toLocaleTimeString('ko-KR');
+            }
+
+            escapeHtml(text) {
+                const div = document.createElement('div');
+                div.textContent = text;
+                return div.innerHTML;
+            }
+
+            showError(message) {
+                const container = document.querySelector('.share-container');
+                if (container) {
+                    container.innerHTML = `
+                        <div class="share-header">
+                            <h1>오류</h1>
+                            <p>파일 공유 중 문제가 발생했습니다</p>
+                        </div>
+                        <div class="share-content">
+                            <div class="error-icon">
+                                <i class="fas fa-exclamation-triangle"></i>
+                            </div>
+                            <div class="error-message">
+                                ${message}
+                            </div>
+                            <div class="file-actions" style="margin-top: 30px;">
+                                <button class="action-btn secondary" onclick="window.close()">
+                                    <i class="fas fa-times"></i> 닫기
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                }
+            }
+
+            showContent() {
+                // Hide loading if exists
+                const loading = document.querySelector('.loading');
+                if (loading) {
+                    loading.style.display = 'none';
+                }
+                
+                // Show content
+                const content = document.querySelector('.share-content');
+                if (content) {
+                    content.style.display = 'block';
+                }
+            }
+        }
+
+        // Initialize share page when DOM is loaded
+        document.addEventListener('DOMContentLoaded', () => {
+            new SharePageManager();
+        });
+    </script>
+</body>
+</html> 
