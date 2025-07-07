@@ -63,7 +63,7 @@ router.post('/register', async (req, res) => {
         const token = jwt.sign(
             { userId: user._id },
             process.env.JWT_SECRET || 'your-secret-key',
-            { expiresIn: '7d' }
+            { expiresIn: process.env.JWT_EXPRIES_IN || '7d' }
         );
 
         // Remove password from response
@@ -131,7 +131,7 @@ router.post('/login', async (req, res) => {
         const token = jwt.sign(
             { userId: user._id },
             process.env.JWT_SECRET || 'your-secret-key',
-            { expiresIn: '7d' }
+            { expiresIn: process.env.JWT_EXPRIES_IN || '7d' }
         );
 
         // Remove password from response
