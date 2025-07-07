@@ -22,8 +22,12 @@ if (process.env.NODE_ENV === 'production') {
 
 // Initialize Firebase
 try {
-    // initializeFirebase(); // 로컬에서 임시 비활성화 (Private Key 문제로 인해)
-    console.log('Firebase initialization temporarily disabled for local development');
+    if (process.env.NODE_ENV === 'production' && process.env.FIREBASE_PROJECT_ID) {
+        initializeFirebase();
+        console.log('🔥 Firebase initialized successfully');
+    } else {
+        console.log('🔥 Firebase disabled for local development');
+    }
 } catch (error) {
     console.error('Firebase initialization failed:', error);
 }
