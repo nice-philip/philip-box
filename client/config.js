@@ -1,5 +1,7 @@
-// API Configuration
-const API_BASE_URL = 'https://philip-box.onrender.com/api';
+// API Configuration - 환경에 따라 자동 설정
+const API_BASE_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' 
+    ? 'http://localhost:8080/api'
+    : 'https://philip-box.onrender.com/api';
 
 const API_ENDPOINTS = {
     auth: {

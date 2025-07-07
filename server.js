@@ -29,12 +29,18 @@ try {
 }
 
 // Connect to MongoDB
-mongoose.connect(process.env.MONGODB_URI, {
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/philip-box';
+console.log('MongoDB URI:', MONGODB_URI);
+
+mongoose.connect(MONGODB_URI, {
         useNewUrlParser: true,
         useUnifiedTopology: true
     })
     .then(() => console.log('MongoDB connected successfully'))
-    .catch(err => console.error('MongoDB connection error:', err));
+    .catch(err => {
+        console.error('MongoDB connection error:', err);
+        console.log('⚠️  MongoDB connection failed - Some features may not work');
+    });
 
 // Middleware
 app.use(helmet({
